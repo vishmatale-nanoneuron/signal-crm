@@ -1,0 +1,80 @@
+#cloud-config
+# Signal CRM — Oracle Cloud Auto-Deploy
+# Paste this into "User Data" when creating your Oracle Cloud VM instance
+# The app will auto-deploy on first boot — no SSH required!
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - docker.io
+  - docker-compose
+  - nginx
+  - git
+  - curl
+  - iptables-persistent
+
+runcmd:
+  # Enable Docker
+  - systemctl start docker
+  - systemctl enable docker
+
+  # Open firewall ports (Oracle Cloud Ubuntu blocks ports by default)
+  - iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT
+  - iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
+  - iptables -I INPUT 6 -m state --state NEW -p tcp --dport 8000 -j ACCEPT
+  - netfilter-persistent save
+
+  # Clone Signal CRM
+  - git clone https://github.com/vishmatale-nanoneuron/signal-crm.git /opt/signal-crm
+  - cd /opt/signal-crm/backend
+
+  # Create .env with all credentials
+  - |
+    cat > /opt/signal-crm/backend/.env << 'EOF'
+    DATABASE_URL=postgresql+asyncpg://postgres:hGxDovSdlypOHrxVvpIZCZuXVBnBIZFU@hopper.proxy.rlwy.net:26020/railway
+    JWT_SECRET=8ff4bd18f34d3c62430f975c0cd37b9d98d5659bacb60ae9832a04d818d86267
+    JWT_ALGORITHM=HS256
+    RAZORPAY_KEY_ID=rzp_test_SXSbotImCIeKSM
+    RAZORPAY_KEY_SECRET=K7mIRyHhIqL2eDCTrcLjP2i5
+    BANK_NAME=Axis Bank Ltd
+    BANK_ACCOUNT_NUMBER=922020067340454
+    BANK_ACCOUNT_HOLDER=Nanoneuron Services
+    BANK_IFSC=UTIB0005124
+    CORS_ORIGINS=["http://localhost:3000","https://signal-crm.pages.dev","https://nanoneuron.ai"]
+    EXTRA_CORS_ORIGINS=https://signal-crm.pages.dev
+    PORT=8000
+    EOF
+
+  # Build and start Docker container
+  - cd /opt/signal-crm/backend && docker build -t signal-crm-api .
+  - docker run -d --name signal-crm-api --restart always -p 8000:8000 --env-file /opt/signal-crm/backend/.env signal-crm-api
+
+  # Setup Nginx reverse proxy
+  - |
+    cat > /etc/nginx/sites-available/signal-crm << 'NGINXEOF'
+    server {
+        listen 80 default_server;
+        server_name _;
+        client_max_body_size 10M;
+
+        location / {
+            proxy_pass http://localhost:8000;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 300;
+            proxy_connect_timeout 300;
+        }
+    }
+    NGINXEOF
+  - ln -sf /etc/nginx/sites-available/signal-crm /etc/nginx/sites-enabled/
+  - rm -f /etc/nginx/sites-enabled/default
+  - nginx -t && systemctl restart nginx
+  - systemctl enable nginx
+
+  # Log success
+  - echo "Signal CRM deployed successfully!" > /var/log/signal-crm-deploy.log
+  - curl -s http://localhost:8000/api/health >> /var/log/signal-crm-deploy.log
