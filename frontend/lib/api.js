@@ -1,4 +1,4 @@
-const PROD_API = "https://signal-crm-production.up.railway.app";
+const PROD_API = "https://signal-crm-api-production.up.railway.app";
 
 export const API_BASE =
   typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_URL
