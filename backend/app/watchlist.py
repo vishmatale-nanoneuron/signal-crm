@@ -1,13 +1,10 @@
-"""Signal CRM — Watchlist Account Management"""
+"""Signal CRM — Watchlist Account Management (Supabase)"""
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 from pydantic import BaseModel
-from app.database import get_db
 from app.auth import get_current_user
-from app.models import User, WatchlistAccount, WebSignal
+from app.supabase_client import get_supabase
 
 watchlist_router = APIRouter(prefix="/watchlist", tags=["Watchlist"])
 
@@ -45,211 +42,70 @@ class UpdateAccountReq(BaseModel):
 
 
 @watchlist_router.get("")
-async def list_accounts(
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(
-        select(WatchlistAccount)
-        .where(WatchlistAccount.user_id == user.id)
-        .order_by(WatchlistAccount.created_at.desc())
-    )
-    accounts = result.scalars().all()
-
-    # Get signal counts per account
-    signal_counts = {}
-    if accounts:
-        ids = [a.id for a in accounts]
-        for account_id in ids:
-            cnt = await db.execute(
-                select(func.count(WebSignal.id)).where(
-                    WebSignal.account_id == account_id,
-                    WebSignal.is_dismissed == False,
-                )
-            )
-            signal_counts[account_id] = cnt.scalar() or 0
-
-    return {
-        "success": True,
-        "accounts": [
-            {
-                "id": str(a.id),
-                "company_name": a.company_name,
-                "domain": a.domain,
-                "industry": a.industry,
-                "country": a.country,
-                "hq_country": a.hq_country,
-                "employee_size": a.employee_size,
-                "priority": a.priority,
-                "watch_hiring": a.watch_hiring,
-                "watch_pricing": a.watch_pricing,
-                "watch_compliance": a.watch_compliance,
-                "watch_leadership": a.watch_leadership,
-                "watch_expansion": a.watch_expansion,
-                "last_checked": a.last_checked.isoformat() if a.last_checked else None,
-                "signal_count": signal_counts.get(a.id, 0),
-                "notes": a.notes,
-                "created_at": a.created_at.isoformat(),
-            }
-            for a in accounts
-        ],
-        "total": len(accounts),
-    }
+def list_accounts(user: dict = Depends(get_current_user)):
+    sb = get_supabase()
+    result = sb.table("watchlist_accounts").select("*").eq("user_id", user["id"]).order("created_at", desc=True).execute()
+    accounts = result.data or []
+    return {"success": True, "accounts": accounts, "total": len(accounts)}
 
 
 @watchlist_router.post("")
-async def add_account(
-    req: AddAccountReq,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    # Check for duplicate domain
-    existing = await db.execute(
-        select(WatchlistAccount).where(
-            WatchlistAccount.user_id == user.id,
-            WatchlistAccount.domain == req.domain.lower().strip(),
-        )
-    )
-    if existing.scalar_one_or_none():
-        raise HTTPException(400, f"'{req.domain}' is already in your watchlist")
-
-    account = WatchlistAccount(
-        user_id=user.id,
-        company_name=req.company_name.strip(),
-        domain=req.domain.lower().strip(),
-        industry=req.industry,
-        country=req.country,
-        hq_country=req.hq_country,
-        employee_size=req.employee_size,
-        priority=req.priority,
-        watch_hiring=req.watch_hiring,
-        watch_pricing=req.watch_pricing,
-        watch_compliance=req.watch_compliance,
-        watch_leadership=req.watch_leadership,
-        watch_expansion=req.watch_expansion,
-        notes=req.notes,
-        last_checked=datetime.utcnow(),
-    )
-    db.add(account)
-    await db.commit()
-    await db.refresh(account)
-
-    return {
-        "success": True,
-        "account": {
-            "id": str(account.id),
-            "company_name": account.company_name,
-            "domain": account.domain,
-            "industry": account.industry,
-            "country": account.country,
-            "priority": account.priority,
-            "signal_count": 0,
-        },
-        "message": f"'{account.company_name}' added to watchlist.",
+def add_account(req: AddAccountReq, user: dict = Depends(get_current_user)):
+    sb = get_supabase()
+    domain = req.domain.lower().strip()
+    existing = sb.table("watchlist_accounts").select("id").eq("user_id", user["id"]).eq("domain", domain).execute()
+    if existing.data:
+        raise HTTPException(400, f"'{domain}' is already in your watchlist")
+    row = {
+        "user_id": user["id"],
+        "company_name": req.company_name.strip(),
+        "domain": domain,
+        "industry": req.industry,
+        "country": req.country,
+        "hq_country": req.hq_country,
+        "employee_size": req.employee_size,
+        "priority": req.priority,
+        "watch_hiring": req.watch_hiring,
+        "watch_pricing": req.watch_pricing,
+        "watch_compliance": req.watch_compliance,
+        "watch_leadership": req.watch_leadership,
+        "watch_expansion": req.watch_expansion,
+        "notes": req.notes,
+        "last_checked": datetime.utcnow().isoformat(),
     }
+    result = sb.table("watchlist_accounts").insert(row).execute()
+    return {"success": True, "account": result.data[0], "message": f"'{req.company_name}' added to watchlist."}
 
 
 @watchlist_router.put("/{account_id}")
-async def update_account(
-    account_id: str,
-    req: UpdateAccountReq,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(
-        select(WatchlistAccount).where(
-            WatchlistAccount.id == account_id, WatchlistAccount.user_id == user.id
-        )
-    )
-    account = result.scalar_one_or_none()
-    if not account:
+def update_account(account_id: str, req: UpdateAccountReq, user: dict = Depends(get_current_user)):
+    sb = get_supabase()
+    existing = sb.table("watchlist_accounts").select("id").eq("id", account_id).eq("user_id", user["id"]).execute()
+    if not existing.data:
         raise HTTPException(404, "Account not found")
-
-    for field, value in req.model_dump(exclude_none=True).items():
-        setattr(account, field, value)
-
-    await db.commit()
-    await db.refresh(account)
-
-    return {
-        "success": True,
-        "account": {
-            "id": str(account.id),
-            "company_name": account.company_name,
-            "domain": account.domain,
-            "priority": account.priority,
-            "watch_hiring": account.watch_hiring,
-            "watch_pricing": account.watch_pricing,
-            "watch_compliance": account.watch_compliance,
-            "watch_leadership": account.watch_leadership,
-            "watch_expansion": account.watch_expansion,
-        },
-        "message": "Account updated.",
-    }
+    updates = {k: v for k, v in req.model_dump(exclude_none=True).items()}
+    if not updates:
+        raise HTTPException(400, "No fields to update")
+    result = sb.table("watchlist_accounts").update(updates).eq("id", account_id).eq("user_id", user["id"]).execute()
+    return {"success": True, "account": result.data[0], "message": "Account updated."}
 
 
 @watchlist_router.delete("/{account_id}")
-async def delete_account(
-    account_id: str,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(
-        select(WatchlistAccount).where(
-            WatchlistAccount.id == account_id, WatchlistAccount.user_id == user.id
-        )
-    )
-    account = result.scalar_one_or_none()
-    if not account:
+def delete_account(account_id: str, user: dict = Depends(get_current_user)):
+    sb = get_supabase()
+    existing = sb.table("watchlist_accounts").select("company_name").eq("id", account_id).eq("user_id", user["id"]).execute()
+    if not existing.data:
         raise HTTPException(404, "Account not found")
-
-    await db.delete(account)
-    await db.commit()
-
-    return {"success": True, "message": f"'{account.company_name}' removed from watchlist."}
+    name = existing.data[0].get("company_name", "")
+    sb.table("watchlist_accounts").delete().eq("id", account_id).eq("user_id", user["id"]).execute()
+    return {"success": True, "message": f"'{name}' removed from watchlist."}
 
 
 @watchlist_router.get("/{account_id}/signals")
-async def account_signals(
-    account_id: str,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    # Verify ownership
-    acc_result = await db.execute(
-        select(WatchlistAccount).where(
-            WatchlistAccount.id == account_id, WatchlistAccount.user_id == user.id
-        )
-    )
-    account = acc_result.scalar_one_or_none()
-    if not account:
+def account_signals(account_id: str, user: dict = Depends(get_current_user)):
+    sb = get_supabase()
+    acc = sb.table("watchlist_accounts").select("id,company_name").eq("id", account_id).eq("user_id", user["id"]).maybe_single().execute()
+    if not acc.data:
         raise HTTPException(404, "Account not found")
-
-    result = await db.execute(
-        select(WebSignal)
-        .where(WebSignal.account_id == account_id, WebSignal.is_dismissed == False)
-        .order_by(WebSignal.detected_at.desc())
-    )
-    signals = result.scalars().all()
-
-    return {
-        "success": True,
-        "account": {"id": str(account.id), "company_name": account.company_name},
-        "signals": [
-            {
-                "id": str(s.id),
-                "signal_type": s.signal_type,
-                "signal_strength": s.signal_strength,
-                "title": s.title,
-                "summary": s.summary,
-                "proof_text": s.proof_text,
-                "proof_url": s.proof_url,
-                "country_hint": s.country_hint,
-                "recommended_action": s.recommended_action,
-                "is_actioned": s.is_actioned,
-                "detected_at": s.detected_at.isoformat(),
-            }
-            for s in signals
-        ],
-        "total": len(signals),
-    }
+    signals = sb.table("web_signals").select("*").eq("account_id", account_id).eq("is_dismissed", False).order("detected_at", desc=True).execute()
+    return {"success": True, "account": acc.data, "signals": signals.data or [], "total": len(signals.data or [])}

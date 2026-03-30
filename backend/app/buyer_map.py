@@ -1,7 +1,7 @@
 """Signal CRM — Buyer Map (hardcoded data)"""
 from fastapi import APIRouter, Query
 from app.auth import get_current_user
-from app.models import User
+
 from fastapi import Depends
 
 buyer_map_router = APIRouter(prefix="/buyer-map", tags=["Buyer Map"])
@@ -270,7 +270,7 @@ ALL_COUNTRIES = sorted({country for ind_data in BUYER_MAP.values() for country i
 async def get_buyer_map(
     industry: str = Query(..., description="Industry vertical"),
     country: str = Query(..., description="Target country"),
-    user: User = Depends(get_current_user),
+    user: dict = Depends(get_current_user),
 ):
     industry_data = BUYER_MAP.get(industry)
     if not industry_data:
@@ -289,12 +289,12 @@ async def get_buyer_map(
 
 
 @buyer_map_router.get("/industries")
-async def list_industries(user: User = Depends(get_current_user)):
+async def list_industries(user: dict = Depends(get_current_user)):
     return {"success": True, "industries": INDUSTRIES, "total": len(INDUSTRIES)}
 
 
 @buyer_map_router.get("/countries")
-async def list_countries(user: User = Depends(get_current_user)):
+async def list_countries(user: dict = Depends(get_current_user)):
     country_difficulty = {}
     for ind_data in BUYER_MAP.values():
         for country, data in ind_data.items():
@@ -320,7 +320,7 @@ async def list_countries(user: User = Depends(get_current_user)):
 
 
 @buyer_map_router.get("/quick-insights")
-async def quick_insights(user: User = Depends(get_current_user)):
+async def quick_insights(user: dict = Depends(get_current_user)):
     """Top 6 easiest industry+country combos for entry"""
     easy_combos = []
     for industry, countries in BUYER_MAP.items():

@@ -3,14 +3,17 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "postgresql+asyncpg://admin:secret@localhost:5432/signal_crm"
-    JWT_SECRET: str = "SignalCRM2026SecretKeyChangeMe"
-    JWT_ALGORITHM: str = "HS256"
-    ANTHROPIC_API_KEY: str = ""
+    # Supabase
+    SUPABASE_URL: str = ""
+    SUPABASE_ANON_KEY: str = ""
+    SUPABASE_SERVICE_KEY: str = ""
+
+    # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "https://signal-crm.pages.dev"]
     EXTRA_CORS_ORIGINS: str = ""
-    FOUNDER_EMAIL: str = ""
-    FOUNDER_SECRET: str = ""
+
+    # Anthropic (optional AI features)
+    ANTHROPIC_API_KEY: str = ""
 
     # Razorpay — client payments
     RAZORPAY_KEY_ID: str = "rzp_test_SXSbotImCIeKSM"

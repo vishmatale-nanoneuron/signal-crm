@@ -6,10 +6,11 @@ import { getUser, logout, apiFetch } from "../../lib/api";
 const NAV = [
   { href: "/dashboard", icon: "⚡", label: "Signal Feed" },
   { href: "/dashboard/watchlist", icon: "👁", label: "Watchlist" },
+  { href: "/dashboard/leads", icon: "🎯", label: "Leads" },
   { href: "/dashboard/buyer-map", icon: "🗺", label: "Buyer Map" },
   { href: "/dashboard/compliance", icon: "🛡", label: "Compliance" },
   { href: "/dashboard/deals", icon: "💼", label: "Deals" },
-  { href: "/dashboard/next-actions", icon: "🎯", label: "Next Actions" },
+  { href: "/dashboard/next-actions", icon: "📋", label: "Next Actions" },
   { href: "/dashboard/payment", icon: "💳", label: "Upgrade" },
 ];
 
