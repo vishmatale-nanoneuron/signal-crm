@@ -1,6 +1,6 @@
 """Signal CRM — Auth + 14-Day Trial"""
 from datetime import datetime, timedelta
-from passlib.context import CryptContext
+import bcrypt
 from jose import jwt, JWTError
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -12,8 +12,13 @@ from app.database import get_db
 from app.models import User
 
 settings = get_settings()
-pwd = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
 bearer = HTTPBearer(auto_error=False)
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
+
+def verify_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
 TRIAL_DAYS = 14
 TRIAL_CREDITS = 20
 
@@ -119,7 +124,7 @@ async def register(req: RegisterReq, db: AsyncSession = Depends(get_db)):
     now = datetime.utcnow()
     user = User(
         email=req.email,
-        password_hash=pwd.hash(req.password),
+        password_hash=hash_password(req.password),
         name=req.name.strip(),
         company_name=req.company_name.strip(),
         credits=TRIAL_CREDITS,
@@ -153,7 +158,7 @@ async def register(req: RegisterReq, db: AsyncSession = Depends(get_db)):
 async def login(req: LoginReq, db: AsyncSession = Depends(get_db)):
     r = await db.execute(select(User).where(User.email == req.email))
     user = r.scalar_one_or_none()
-    if not user or not pwd.verify(req.password, user.password_hash):
+    if not user or not verify_password(req.password, user.password_hash):
         raise HTTPException(401, "Invalid email or password")
     trial = check_trial_status(user)
     return {
