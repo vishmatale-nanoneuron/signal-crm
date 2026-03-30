@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: signal-crm-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        value: postgresql+asyncpg://postgres:hGxDovSdlypOHrxVvpIZCZuXVBnBIZFU@hopper.proxy.rlwy.net:26020/railway
+      - key: JWT_SECRET
+        value: SignalCRM2026Prod!SecureKey#X9mK2pL
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: RAZORPAY_KEY_ID
+        value: rzp_test_SXSbotImCIeKSM
+      - key: RAZORPAY_KEY_SECRET
+        value: K7mIRyHhIqL2eDCTrcLjP2i5
+      - key: EXTRA_CORS_ORIGINS
+        value: https://signal-crm.pages.dev
+      - key: BANK_NAME
+        value: Axis Bank Ltd
+      - key: BANK_ACCOUNT_NUMBER
+        value: "922020067340454"
+      - key: BANK_ACCOUNT_HOLDER
+        value: Nanoneuron Services
+      - key: BANK_IFSC
+        value: UTIB0005124
