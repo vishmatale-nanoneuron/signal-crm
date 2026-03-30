@@ -9,7 +9,7 @@ services:
     healthCheckPath: /api/health
     envVars:
       - key: DATABASE_URL
-        value: postgresql+asyncpg://postgres:hGxDovSdlypOHrxVvpIZCZuXVBnBIZFU@hopper.proxy.rlwy.net:26020/railway
+        value: postgresql+asyncpg://signal_crm_user:KskWQ1COEM6MrJuYsBRJN4D71gspdcKg@dpg-d75fjumdqaus73bb3aug-a/signal_crm
       - key: JWT_SECRET
         value: SignalCRM2026Prod!SecureKey#X9mK2pL
       - key: JWT_ALGORITHM
