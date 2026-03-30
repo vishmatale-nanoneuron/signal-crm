@@ -1,0 +1,26 @@
+version: "3.9"
+services:
+  signal-crm-api:
+    build: .
+    container_name: signal-crm-api
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID:-rzp_test_SXSbotImCIeKSM}
+      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET:-K7mIRyHhIqL2eDCTrcLjP2i5}
+      - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:3000"]}
+      - EXTRA_CORS_ORIGINS=${EXTRA_CORS_ORIGINS:-}
+      - BANK_ACCOUNT_NUMBER=922020067340454
+      - BANK_ACCOUNT_HOLDER=Nanoneuron Services
+      - BANK_IFSC=UTIB0005124
+      - PORT=8000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
