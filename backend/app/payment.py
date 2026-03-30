@@ -189,8 +189,8 @@ async def verify_razorpay_payment(
     # Verify signature
     msg = f"{req.razorpay_order_id}|{req.razorpay_payment_id}"
     expected_sig = hmac.new(
-        settings.RAZORPAY_KEY_SECRET.encode(),
-        msg.encode(),
+        settings.RAZORPAY_KEY_SECRET.encode("utf-8"),
+        msg.encode("utf-8"),
         hashlib.sha256,
     ).hexdigest()
 
