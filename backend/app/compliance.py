@@ -2,7 +2,12 @@
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from app.auth import get_current_user
-from app.supabase_client import get_supabase
+from app.database import get_db
+from app.models import User, ComplianceSave
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from fastapi import Depends
+
 
 compliance_router = APIRouter(prefix="/compliance", tags=["Compliance"])
 
@@ -83,3 +88,32 @@ def get_saved(user: dict = Depends(get_current_user)):
     sb = get_supabase()
     result = sb.table("compliance_saves").select("*").eq("user_id", user["id"]).order("created_at", desc=True).execute()
     return {"success": True, "saved": result.data or [], "total": len(result.data or [])}
+
+
+# Override the save/saved endpoints with SQLAlchemy versions
+from fastapi import Depends as _Depends
+from sqlalchemy.ext.asyncio import AsyncSession as _AsyncSession
+from app.database import get_db as _get_db
+from app.models import ComplianceSave as _ComplianceSave, User as _User
+from app.auth import get_current_user as _get_current_user
+from sqlalchemy import select as _select
+from pydantic import BaseModel as _BaseModel
+
+class _SaveReq(_BaseModel):
+    country: str
+    notes: str = ""
+
+@compliance_router.post("/save")
+async def save_compliance_pg(req: _SaveReq, user: _User = _Depends(_get_current_user), db: _AsyncSession = _Depends(_get_db)):
+    data = COMPLIANCE_DATA.get(req.country, {})
+    save = _ComplianceSave(user_id=user.id, country=req.country, framework=data.get("framework",""), notes=req.notes)
+    db.add(save)
+    await db.commit()
+    await db.refresh(save)
+    return {"success": True, "saved": {"id": save.id, "country": save.country}, "message": f"Saved compliance note for {req.country}."}
+
+@compliance_router.get("/saved")
+async def get_saved_pg(user: _User = _Depends(_get_current_user), db: _AsyncSession = _Depends(_get_db)):
+    r = await db.execute(_select(_ComplianceSave).where(_ComplianceSave.user_id == user.id).order_by(_ComplianceSave.created_at.desc()))
+    items = r.scalars().all()
+    return {"success": True, "saved": [{"id": s.id, "country": s.country, "framework": s.framework, "notes": s.notes} for s in items]}
