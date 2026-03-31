@@ -21,6 +21,38 @@ DEMO_SIGNALS = [
 ]
 
 
+def _signal_dict(s):
+    return {
+        "id": s.id, "company_name": s.account_name, "account_name": s.account_name,
+        "signal_type": s.signal_type, "signal_strength": s.signal_strength,
+        "title": s.title, "summary": s.summary, "proof_text": s.proof_text,
+        "proof_url": s.proof_url, "country_hint": s.country_hint,
+        "recommended_action": s.recommended_action, "score": s.score,
+        "is_actioned": s.is_actioned, "detected_at": s.detected_at.isoformat(),
+    }
+
+
+@signals_router.get("/feed")
+async def signals_feed(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    r = await db.execute(
+        select(WebSignal).where(WebSignal.user_id == user.id, WebSignal.is_dismissed == False)
+        .order_by(WebSignal.score.desc(), WebSignal.detected_at.desc())
+    )
+    signals = r.scalars().all()
+    high_priority = sum(1 for s in signals if s.signal_strength == "high")
+    actioned = sum(1 for s in signals if s.is_actioned)
+    return {
+        "success": True,
+        "stats": {
+            "total": len(signals),
+            "high_priority": high_priority,
+            "actioned": actioned,
+            "watchlisted_companies": 0,
+        },
+        "feed": [_signal_dict(s) for s in signals],
+    }
+
+
 @signals_router.get("")
 async def list_signals(signal_type: str = Query(None), country: str = Query(None),
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
@@ -29,13 +61,7 @@ async def list_signals(signal_type: str = Query(None), country: str = Query(None
     if country: q = q.where(WebSignal.country_hint == country)
     r = await db.execute(q.order_by(WebSignal.detected_at.desc()))
     signals = r.scalars().all()
-    return {"success": True, "signals": [
-        {"id": s.id, "account_name": s.account_name, "signal_type": s.signal_type,
-         "signal_strength": s.signal_strength, "title": s.title, "summary": s.summary,
-         "proof_text": s.proof_text, "proof_url": s.proof_url, "country_hint": s.country_hint,
-         "recommended_action": s.recommended_action, "score": s.score,
-         "is_actioned": s.is_actioned, "detected_at": s.detected_at.isoformat()} for s in signals
-    ], "total": len(signals)}
+    return {"success": True, "signals": [_signal_dict(s) for s in signals], "total": len(signals)}
 
 
 @signals_router.post("/seed")
