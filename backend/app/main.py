@@ -19,14 +19,17 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create all tables on startup
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    print("✓ Signal CRM v2.0 — Database ready")
-    print(f"✓ CORS origins: {settings.CORS_ORIGINS}")
+    # Try to create tables — non-fatal if DB not ready yet at startup
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        print("✓ Signal CRM v2.0 — Database tables ready")
+    except Exception as e:
+        print(f"⚠ DB init skipped at startup (will retry on first request): {e}")
+    print(f"✓ Signal CRM v2.0 started — CORS: {settings.CORS_ORIGINS}")
     yield
     await engine.dispose()
-    print("Signal CRM — Shutdown complete")
+    print("Signal CRM — Shutdown")
 
 
 app = FastAPI(
