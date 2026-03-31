@@ -4,10 +4,7 @@ from app.config import get_settings
 
 settings = get_settings()
 db_url = settings.get_async_db_url()
-
-# asyncpg SSL: use False for local/internal, True for public Railway proxy
-_no_ssl = any(x in db_url for x in ["localhost", "127.0.0.1", "railway.internal"])
-connect_args = {"ssl": False} if _no_ssl else {"ssl": True}
+# SSL and driver are handled via sslmode= in the URL (psycopg3 supports this natively)
 
 engine = create_async_engine(
     db_url,
@@ -16,7 +13,6 @@ engine = create_async_engine(
     pool_size=3,
     max_overflow=7,
     pool_recycle=300,
-    connect_args=connect_args,
 )
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
