@@ -19,22 +19,30 @@ from app.leads import leads_router
 settings = get_settings()
 
 
-async def _init_db():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+async def _bg_init_db():
+    """Background task: create tables with retries, non-blocking for startup."""
+    await asyncio.sleep(3)  # Let uvicorn fully start first
+    for attempt in range(10):
+        try:
+            async with engine.connect() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+                await conn.commit()
+            print("✓ Signal CRM — DB tables ready")
+            return
+        except Exception as e:
+            print(f"⚠ DB init attempt {attempt + 1}/10: {type(e).__name__} — retrying in 15s")
+            await asyncio.sleep(15)
+    print("✗ DB init gave up after 10 attempts — check DATABASE_URL")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    db_url_hint = os.environ.get("DATABASE_URL", "not-set")[:30]
-    print(f"✓ Signal CRM v2.0 starting — DB hint: {db_url_hint}...")
-    # Hard 5-second limit — Railway health check fires at 120s; DB init must not block
-    try:
-        await asyncio.wait_for(_init_db(), timeout=5.0)
-        print("✓ Signal CRM v2.0 — Database tables ready")
-    except Exception as e:
-        print(f"⚠ DB init deferred (will retry on first request): {type(e).__name__}: {e}")
-    print("✓ Signal CRM v2.0 started — ready to accept requests")
+    env = os.environ.get("RAILWAY_ENVIRONMENT", "local")
+    db_hint = os.environ.get("DATABASE_URL", "")[:40]
+    print(f"✓ Signal CRM v2.0 starting — env={env} db={db_hint}...")
+    # Fire DB init as a background task — NEVER block startup
+    asyncio.ensure_future(_bg_init_db())
+    print("✓ Signal CRM v2.0 ready")
     yield
     await engine.dispose()
     print("Signal CRM — Shutdown")

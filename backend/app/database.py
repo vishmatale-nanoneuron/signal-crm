@@ -5,16 +5,15 @@ from app.config import get_settings
 settings = get_settings()
 db_url = settings.get_async_db_url()
 
-# ssl=False works for both Railway internal (railway.internal) and
-# Railway public proxy (rlwy.net) — Railway proxy accepts non-SSL on the Postgres port
 engine = create_async_engine(
     db_url,
     echo=False,
-    pool_pre_ping=False,
+    pool_pre_ping=True,
     pool_size=3,
     max_overflow=7,
     pool_recycle=300,
-    connect_args={"ssl": False, "timeout": 10},
+    pool_timeout=30,
+    connect_args={"ssl": False, "command_timeout": 30},
 )
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
