@@ -1,10 +1,8 @@
-const PROD_API = "https://signal-crm-api.onrender.com";
-
+// NEXT_PUBLIC_API_URL must be set in Cloudflare Pages environment variables
+// Value: your Railway backend URL e.g. https://signal-crm-production.up.railway.app
 export const API_BASE =
-  typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_URL
+  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_URL)
     ? process.env.NEXT_PUBLIC_API_URL
-    : typeof window !== "undefined" && window.location.hostname !== "localhost"
-    ? PROD_API
     : "http://localhost:8000";
 
 export function apiFetch(path, opts = {}) {

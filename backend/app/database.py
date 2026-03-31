@@ -3,12 +3,19 @@ from sqlalchemy.orm import DeclarativeBase
 from app.config import get_settings
 
 settings = get_settings()
+db_url = settings.get_async_db_url()
+
+# Railway internal connections don't need SSL; external or unknown — let asyncpg decide
+_is_internal = "railway.internal" in db_url or "localhost" in db_url or "127.0.0.1" in db_url
+connect_args = {"ssl": False} if _is_internal else {}
 
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    db_url,
     echo=False,
     pool_pre_ping=True,
-    connect_args={"ssl": False} if "railway.internal" in settings.DATABASE_URL else {},
+    pool_size=5,
+    max_overflow=10,
+    connect_args=connect_args,
 )
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
