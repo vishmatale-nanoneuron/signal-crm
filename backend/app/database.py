@@ -4,8 +4,9 @@ from app.config import get_settings
 
 settings = get_settings()
 db_url = settings.get_async_db_url()
-# SSL and driver are handled via sslmode= in the URL (psycopg3 supports this natively)
 
+# ssl=False works for both Railway internal (railway.internal) and
+# Railway public proxy (rlwy.net) — Railway proxy accepts non-SSL on the Postgres port
 engine = create_async_engine(
     db_url,
     echo=False,
@@ -13,6 +14,7 @@ engine = create_async_engine(
     pool_size=3,
     max_overflow=7,
     pool_recycle=300,
+    connect_args={"ssl": False},
 )
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
