@@ -19,34 +19,65 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Create all tables on startup
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    print("Signal CRM v2.0 — Database tables ready")
+    print("✓ Signal CRM v2.0 — Database ready")
+    print(f"✓ CORS origins: {settings.CORS_ORIGINS}")
     yield
     await engine.dispose()
+    print("Signal CRM — Shutdown complete")
 
 
-app = FastAPI(title="Signal CRM", version="2.0.0", lifespan=lifespan,
-    description="Privacy-aware cross-border signal CRM — Turn web changes into sales actions.")
+app = FastAPI(
+    title="Signal CRM API",
+    version="2.0.0",
+    lifespan=lifespan,
+    description="Privacy-aware cross-border signal CRM — Turn web changes into sales actions.",
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
 
+# Build CORS origins list
 _cors = list(settings.CORS_ORIGINS)
 if settings.EXTRA_CORS_ORIGINS:
     _cors += [o.strip() for o in settings.EXTRA_CORS_ORIGINS.split(",") if o.strip()]
 
-app.add_middleware(CORSMiddleware, allow_origins=_cors, allow_credentials=True,
-    allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-for router in [auth, watchlist_router, signals_router, buyer_map_router, compliance_router,
-               deals_router, next_action_router, payment_router, leads_router]:
+# Register all routers
+for router in [
+    auth, watchlist_router, signals_router, buyer_map_router,
+    compliance_router, deals_router, next_action_router,
+    payment_router, leads_router,
+]:
     app.include_router(router, prefix="/api")
 
 
 @app.get("/api/health")
 async def health():
-    return {"status": "healthy", "app": "Signal CRM", "version": "2.0.0", "database": "postgresql",
-            "modules": ["auth","signals","watchlist","buyer-map","compliance","deals","leads","next-actions","payment"]}
+    return {
+        "status": "healthy",
+        "app": "Signal CRM",
+        "version": "2.0.0",
+        "modules": [
+            "auth", "signals", "watchlist", "buyer-map",
+            "compliance", "deals", "leads", "next-actions", "payment",
+        ],
+    }
 
 
 @app.get("/")
 async def root():
-    return {"message": "Signal CRM API", "docs": "/docs", "health": "/api/health"}
+    return {
+        "message": "Signal CRM API — Turn web changes into sales actions.",
+        "docs": "/docs",
+        "health": "/api/health",
+        "website": "nanoneuron.ai",
+    }

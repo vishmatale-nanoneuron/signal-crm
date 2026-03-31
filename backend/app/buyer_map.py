@@ -1,9 +1,7 @@
-from app.models import User
-"""Signal CRM — Buyer Map (hardcoded data)"""
-from fastapi import APIRouter, Query
+"""Signal CRM — Buyer Map"""
+from fastapi import APIRouter, Depends, Query
 from app.auth import get_current_user
-
-from fastapi import Depends
+from app.models import User
 
 buyer_map_router = APIRouter(prefix="/buyer-map", tags=["Buyer Map"])
 

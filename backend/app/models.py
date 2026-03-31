@@ -1,16 +1,21 @@
+"""Signal CRM — Database Models"""
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Boolean, Integer, Float, DateTime, Text, ForeignKey
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import String, Boolean, Integer, Float, DateTime, Text, ForeignKey, Index
+from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
+
+
+def _uuid() -> str:
+    return str(uuid.uuid4())
 
 
 class User(Base):
     __tablename__ = "users"
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    password_hash: Mapped[str] = mapped_column(String(255))
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(255), default="")
     company_name: Mapped[str] = mapped_column(String(255), default="")
     credits: Mapped[int] = mapped_column(Integer, default=20)
@@ -24,10 +29,12 @@ class User(Base):
 
 class WatchlistAccount(Base):
     __tablename__ = "watchlist_accounts"
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    company_name: Mapped[str] = mapped_column(String(255))
-    domain: Mapped[str] = mapped_column(String(255))
+    __table_args__ = (Index("ix_watchlist_user_id", "user_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    company_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    domain: Mapped[str] = mapped_column(String(255), default="")
     industry: Mapped[str] = mapped_column(String(100), default="")
     country: Mapped[str] = mapped_column(String(100), default="")
     hq_country: Mapped[str] = mapped_column(String(100), default="")
@@ -45,14 +52,19 @@ class WatchlistAccount(Base):
 
 class WebSignal(Base):
     __tablename__ = "web_signals"
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    __table_args__ = (
+        Index("ix_signals_user_id", "user_id"),
+        Index("ix_signals_detected_at", "detected_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     account_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("watchlist_accounts.id", ondelete="SET NULL"), nullable=True)
-    account_name: Mapped[str] = mapped_column(String(255))
-    signal_type: Mapped[str] = mapped_column(String(50))
+    account_name: Mapped[str] = mapped_column(String(255), default="")
+    signal_type: Mapped[str] = mapped_column(String(50), default="")
     signal_strength: Mapped[str] = mapped_column(String(20), default="medium")
-    title: Mapped[str] = mapped_column(String(500))
-    summary: Mapped[str] = mapped_column(Text)
+    title: Mapped[str] = mapped_column(String(500), default="")
+    summary: Mapped[str] = mapped_column(Text, default="")
     proof_text: Mapped[str] = mapped_column(Text, default="")
     proof_url: Mapped[str] = mapped_column(String(500), default="")
     country_hint: Mapped[str] = mapped_column(String(100), default="")
@@ -65,13 +77,15 @@ class WebSignal(Base):
 
 class Deal(Base):
     __tablename__ = "deals"
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    title: Mapped[str] = mapped_column(String(255))
+    __table_args__ = (Index("ix_deals_user_id", "user_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
     company_name: Mapped[str] = mapped_column(String(255), default="")
     contact_name: Mapped[str] = mapped_column(String(255), default="")
     contact_title: Mapped[str] = mapped_column(String(255), default="")
-    value: Mapped[float] = mapped_column(Float, default=0)
+    value: Mapped[float] = mapped_column(Float, default=0.0)
     currency: Mapped[str] = mapped_column(String(10), default="INR")
     stage: Mapped[str] = mapped_column(String(50), default="signal")
     country: Mapped[str] = mapped_column(String(100), default="")
@@ -88,9 +102,11 @@ class Deal(Base):
 
 class Lead(Base):
     __tablename__ = "leads"
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    company: Mapped[str] = mapped_column(String(255))
+    __table_args__ = (Index("ix_leads_user_id", "user_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    company: Mapped[str] = mapped_column(String(255), default="")
     contact_name: Mapped[str] = mapped_column(String(255), default="")
     title: Mapped[str] = mapped_column(String(255), default="")
     email: Mapped[str] = mapped_column(String(255), default="")
@@ -106,9 +122,11 @@ class Lead(Base):
 
 class ComplianceSave(Base):
     __tablename__ = "compliance_saves"
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    country: Mapped[str] = mapped_column(String(100))
+    __table_args__ = (Index("ix_compliance_user_id", "user_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    country: Mapped[str] = mapped_column(String(100), default="")
     framework: Mapped[str] = mapped_column(String(100), default="")
     notes: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
