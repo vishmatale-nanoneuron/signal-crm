@@ -68,7 +68,7 @@ async def health():
     return {
         "status": "healthy",
         "app": "Signal CRM",
-        "version": "2.0.0",
+        "version": "3.0-LIVE-TEST",
         "modules": [
             "auth", "signals", "watchlist", "buyer-map",
             "compliance", "deals", "leads", "next-actions", "payment",
