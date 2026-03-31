@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     BANK_ACCOUNT_HOLDER: str = "Nanoneuron Services"
     BANK_IFSC: str = "UTIB0005124"
     UPI_ID: str = ""
+    SWIFT_CODE: str = "AXISINBB"
+    BANK_SWIFT_ADDRESS: str = "Axis Bank Ltd, Tilekar Road Branch, Pune, Maharashtra, India"
+    BANK_USD_ACCOUNT: str = ""
+    BANK_EUR_ACCOUNT: str = ""
 
     def get_async_db_url(self) -> str:
         """Ensure postgresql+asyncpg:// driver prefix for SQLAlchemy async engine"""
