@@ -1,4 +1,5 @@
 """Signal CRM — Privacy-Aware Cross-Border Signal CRM"""
+import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -19,14 +20,15 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Try to create tables — non-fatal if DB not ready yet at startup
+    # 5-second hard limit on DB init — app must start fast for Railway health check
     try:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+        async with asyncio.timeout(5):
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
         print("✓ Signal CRM v2.0 — Database tables ready")
     except Exception as e:
-        print(f"⚠ DB init skipped at startup (will retry on first request): {e}")
-    print(f"✓ Signal CRM v2.0 started — CORS: {settings.CORS_ORIGINS}")
+        print(f"⚠ DB init deferred (tables will be created on first request): {e}")
+    print("✓ Signal CRM v2.0 started")
     yield
     await engine.dispose()
     print("Signal CRM — Shutdown")
