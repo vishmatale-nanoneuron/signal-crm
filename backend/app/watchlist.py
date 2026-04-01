@@ -7,7 +7,7 @@ from sqlalchemy import select, func
 from pydantic import BaseModel
 from app.database import get_db
 from app.auth import get_current_user
-from app.models import User, WatchlistAccount, WebSignal
+from app.models import User, WatchlistAccount, WebSignal, TrackedPage
 
 watchlist_router = APIRouter(prefix="/watchlist", tags=["Watchlist"])
 
@@ -31,11 +31,33 @@ class UpdateAccountReq(BaseModel):
 async def list_accounts(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(WatchlistAccount).where(WatchlistAccount.user_id == user.id).order_by(WatchlistAccount.created_at.desc()))
     accounts = result.scalars().all()
+
+    # Signal counts per account
+    sig_r = await db.execute(
+        select(WebSignal.account_id, func.count(WebSignal.id).label("cnt"))
+        .where(WebSignal.user_id == user.id, WebSignal.is_dismissed == False)
+        .group_by(WebSignal.account_id)
+    )
+    sig_counts = {row.account_id: row.cnt for row in sig_r}
+
+    # Last scanned per account (from TrackedPage)
+    tp_r = await db.execute(
+        select(TrackedPage.account_id, func.max(TrackedPage.last_scanned_at).label("ls"))
+        .group_by(TrackedPage.account_id)
+    )
+    last_scanned = {row.account_id: row.ls for row in tp_r}
+
     return {"success": True, "accounts": [
-        {"id": a.id, "company_name": a.company_name, "domain": a.domain, "industry": a.industry,
-         "country": a.country, "priority": a.priority, "notes": a.notes,
-         "watch_hiring": a.watch_hiring, "watch_pricing": a.watch_pricing,
-         "created_at": a.created_at.isoformat()} for a in accounts
+        {
+            "id": a.id, "company_name": a.company_name, "domain": a.domain,
+            "industry": a.industry, "country": a.country, "hq_country": a.hq_country,
+            "priority": a.priority, "notes": a.notes,
+            "watch_hiring": a.watch_hiring, "watch_pricing": a.watch_pricing,
+            "watch_expansion": a.watch_expansion,
+            "signal_count": sig_counts.get(a.id, 0),
+            "last_scanned": last_scanned.get(a.id, a.last_checked).isoformat() if (last_scanned.get(a.id) or a.last_checked) else None,
+            "created_at": a.created_at.isoformat(),
+        } for a in accounts
     ], "total": len(accounts)}
 
 

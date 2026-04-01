@@ -243,24 +243,44 @@ export default function LeadsPage() {
                 </div>
               </div>
 
-              <div style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
-                {score > 0 && <LeadScore score={score} />}
-
-                {/* Status badge / dropdown */}
-                <select
-                  value={lead.status || "new"}
-                  onChange={e => updateStatus(lead.id, e.target.value)}
-                  style={{
-                    padding:"7px 12px", background:status.bg,
-                    border:`1px solid ${status.color}44`,
-                    borderRadius:20, color:status.color,
-                    fontSize:12, fontWeight:700, cursor:"pointer",
-                  }}
-                >
-                  {Object.entries(STATUS_META).map(([k, v]) => (
-                    <option key={k} value={k}>{v.label}</option>
-                  ))}
-                </select>
+              <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:8, flexShrink:0 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  {score > 0 && <LeadScore score={score} />}
+                  {/* Status badge / dropdown */}
+                  <select
+                    value={lead.status || "new"}
+                    onChange={e => updateStatus(lead.id, e.target.value)}
+                    style={{
+                      padding:"7px 12px", background:status.bg,
+                      border:`1px solid ${status.color}44`,
+                      borderRadius:20, color:status.color,
+                      fontSize:12, fontWeight:700, cursor:"pointer",
+                    }}
+                  >
+                    {Object.entries(STATUS_META).map(([k, v]) => (
+                      <option key={k} value={k}>{v.label}</option>
+                    ))}
+                  </select>
+                </div>
+                {/* Quick action buttons */}
+                <div style={{ display:"flex", gap:6 }}>
+                  {lead.country && (
+                    <a href={`/dashboard/compliance?country=${encodeURIComponent(lead.country)}`}
+                      style={{ padding:"4px 10px", borderRadius:20, background:"transparent", border:"1px solid rgba(245,166,35,0.25)", color:"#f5a623", fontSize:11, fontWeight:600, textDecoration:"none" }}>
+                      ⚖ Compliance
+                    </a>
+                  )}
+                  {lead.country && (
+                    <a href={`/dashboard/email-templates?country=${encodeURIComponent(lead.country)}`}
+                      style={{ padding:"4px 10px", borderRadius:20, background:"transparent", border:"1px solid rgba(168,85,247,0.25)", color:"#a855f7", fontSize:11, fontWeight:600, textDecoration:"none" }}>
+                      ✉ Email
+                    </a>
+                  )}
+                  <a href="/dashboard/country-intel"
+                    style={{ padding:"4px 10px", borderRadius:20, background:"transparent", border:"1px solid rgba(255,255,255,0.1)", color:"#737373", fontSize:11, fontWeight:600, textDecoration:"none" }}>
+                    🌍 Intel
+                  </a>
+                </div>
               </div>
             </div>
           </div>

@@ -149,6 +149,13 @@ function SignalCard({ s, onAction, onDismiss, onDeal, justCreated }) {
           >
             + Add to Pipeline
           </button>
+          <a href={`/dashboard/signals?id=${s.id}`} style={{
+            padding:"8px 16px", borderRadius:20, background:"rgba(0,113,235,0.1)",
+            border:"1px solid rgba(0,113,235,0.3)", color:"#0071eb",
+            fontSize:12, fontWeight:600, textDecoration:"none",
+          }}>
+            🔍 Full Analysis
+          </a>
           <button onClick={() => onAction(s.id)} style={{
             padding:"8px 16px", borderRadius:20, background:"rgba(70,211,105,0.1)",
             border:"1px solid rgba(70,211,105,0.3)", color:"#46d369",
@@ -165,8 +172,9 @@ function SignalCard({ s, onAction, onDismiss, onDeal, justCreated }) {
           </button>
         </div>
       ) : (
-        <div style={{ fontSize:12, color:"#46d369", fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
-          ✓ Actioned
+        <div style={{ fontSize:12, color:"#46d369", fontWeight:600, display:"flex", alignItems:"center", gap:8 }}>
+          <span>✓ Actioned</span>
+          <a href={`/dashboard/signals?id=${s.id}`} style={{ fontSize:11, color:"#737373", textDecoration:"underline" }}>View Detail →</a>
         </div>
       )}
     </div>

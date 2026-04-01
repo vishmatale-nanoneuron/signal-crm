@@ -21,6 +21,7 @@ from app.leads import leads_router
 from app.country_intel import country_intel_router
 from app.analytics import analytics_router
 from app.email_templates import email_router
+from app.detection_engine import detect_router, ai_router
 
 settings = get_settings()
 
@@ -107,7 +108,7 @@ async def _bg_init_db():
 async def lifespan(app: FastAPI):
     env    = os.environ.get("RAILWAY_ENVIRONMENT", "local")
     db_hint = os.environ.get("DATABASE_URL", "")[:40]
-    print(f"✓ Signal CRM v2.1 starting — env={env} db={db_hint}...")
+    print(f"✓ Signal CRM v3.0 starting — env={env} db={db_hint}...")
     asyncio.ensure_future(_bg_init_db())
     print("✓ Signal CRM v2.1 ready")
     yield
@@ -145,7 +146,7 @@ for router in [
     auth, watchlist_router, signals_router, buyer_map_router,
     compliance_router, deals_router, next_action_router,
     payment_router, leads_router, country_intel_router,
-    analytics_router, email_router,
+    analytics_router, email_router, detect_router, ai_router,
 ]:
     app.include_router(router, prefix="/api")
 

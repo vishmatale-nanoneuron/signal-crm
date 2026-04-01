@@ -4,33 +4,33 @@ import { apiFetch } from "../../../lib/api";
 
 const INDUSTRIES = [
   "SaaS","Fintech","IT Services","Logistics","Manufacturing",
-  "Healthcare","Ecommerce","HR Tech","Legal","Education",
+  "Healthcare","Ecommerce","HR Tech","Legal","Education","Exporters",
   "Media","Pharma","Clean Energy","Real Estate","Construction",
 ];
 
-const SIGNAL_TYPES = [
-  { key:"hiring_spike",      color:"#E50914", label:"Hiring Spike",   icon:"📈" },
-  { key:"new_country_page",  color:"#0071eb", label:"Expansion",      icon:"🌍" },
-  { key:"pricing_change",    color:"#f5a623", label:"Price Change",   icon:"💰" },
-  { key:"leadership_change", color:"#a855f7", label:"Leadership",     icon:"👤" },
-  { key:"new_product",       color:"#46d369", label:"New Product",    icon:"🚀" },
-  { key:"compliance_update", color:"#e87c03", label:"Compliance",     icon:"⚖️"  },
-];
-
-const AVATAR_COLORS = ["#E50914","#0071eb","#f5a623","#46d369","#a855f7","#58a6ff"];
+const PRIORITY_META = {
+  high:   { color:"#E50914", label:"High",   bg:"rgba(229,9,20,0.12)" },
+  medium: { color:"#f5a623", label:"Medium", bg:"rgba(245,166,35,0.12)" },
+  low:    { color:"#737373", label:"Low",    bg:"rgba(115,115,115,0.12)" },
+};
 
 const S = {
-  input:  { width:"100%", padding:"11px 14px", background:"#232323", border:"1px solid rgba(255,255,255,0.12)", borderRadius:4, color:"#fff", fontSize:13 },
-  label:  { fontSize:11, color:"#737373", fontWeight:700, letterSpacing:"0.08em", marginBottom:6, display:"block" },
+  input: { width:"100%", padding:"10px 13px", background:"#232323", border:"1px solid rgba(255,255,255,0.12)", borderRadius:4, color:"#fff", fontSize:13, boxSizing:"border-box" },
+  label: { fontSize:11, color:"#737373", fontWeight:700, letterSpacing:"0.08em", marginBottom:5, display:"block" },
+  th:    { padding:"10px 14px", fontSize:11, fontWeight:700, color:"#737373", letterSpacing:"0.08em", textAlign:"left", borderBottom:"1px solid rgba(255,255,255,0.06)", whiteSpace:"nowrap" },
+  td:    { padding:"14px", fontSize:13, color:"#e5e5e5", borderBottom:"1px solid rgba(255,255,255,0.04)", verticalAlign:"middle" },
 };
 
 export default function WatchlistPage() {
   const [items,    setItems]    = useState([]);
   const [loading,  setLoading]  = useState(true);
-  const [form,     setForm]     = useState({ company_name:"", website:"", industry:"SaaS", country:"" });
+  const [form,     setForm]     = useState({ company_name:"", domain:"", industry:"SaaS", country:"", priority:"medium" });
   const [adding,   setAdding]   = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [toast,    setToast]    = useState(null);
+  const [scanning, setScanning] = useState({});  // accountId → true/false
+  const [scanResults, setScanResults] = useState({});  // accountId → { signals_found }
+  const [search,   setSearch]   = useState("");
 
   const showT = useCallback((msg, type = "success") => {
     setToast({ msg, type });
@@ -40,16 +40,19 @@ export default function WatchlistPage() {
   async function load() {
     setLoading(true);
     const d = await apiFetch("/watchlist");
-    if (d.success) setItems(d.watchlist || []);
+    if (d.success) setItems(d.accounts || []);
     setLoading(false);
   }
 
   async function add(e) {
-    e.preventDefault(); setAdding(true);
-    const r = await apiFetch("/watchlist", { method:"POST", body: JSON.stringify(form) });
+    e.preventDefault();
+    if (!form.company_name.trim()) return;
+    setAdding(true);
+    const payload = { ...form, domain: form.domain || form.company_name.toLowerCase().replace(/\s+/g, "") + ".com" };
+    const r = await apiFetch("/watchlist", { method:"POST", body: JSON.stringify(payload) });
     if (r.success) {
       setShowForm(false);
-      setForm({ company_name:"", website:"", industry:"SaaS", country:"" });
+      setForm({ company_name:"", domain:"", industry:"SaaS", country:"", priority:"medium" });
       await load();
       showT(`${form.company_name} added to watchlist`);
     } else {
@@ -64,7 +67,41 @@ export default function WatchlistPage() {
     showT(`${name} removed`, "info");
   }
 
+  async function scanNow(item) {
+    if (!item.domain) { showT("Add a domain first to scan this company", "error"); return; }
+    setScanning(s => ({ ...s, [item.id]: true }));
+    const r = await apiFetch(`/detect/scan/${item.id}`, { method:"POST" });
+    if (!r.success) { setScanning(s => ({ ...s, [item.id]: false })); showT(r.detail || "Scan failed", "error"); return; }
+    showT(`Scanning ${item.company_name}… results in ~30s`, "success");
+
+    // Poll for status
+    let attempts = 0;
+    const poll = setInterval(async () => {
+      const s = await apiFetch(`/detect/status/${item.id}`);
+      attempts++;
+      if (s.scan?.status === "done" || s.scan?.status === "error" || attempts > 12) {
+        clearInterval(poll);
+        setScanning(prev => ({ ...prev, [item.id]: false }));
+        if (s.scan?.status === "done") {
+          const found = s.scan?.signals_found || 0;
+          setScanResults(prev => ({ ...prev, [item.id]: found }));
+          showT(found > 0 ? `Found ${found} new signal${found > 1 ? "s" : ""} for ${item.company_name}!` : `No new signals for ${item.company_name}`, found > 0 ? "success" : "info");
+          if (found > 0) await load();
+        }
+      }
+    }, 5000);
+  }
+
   useEffect(() => { load(); }, []);
+
+  const filtered = items.filter(i =>
+    !search || i.company_name?.toLowerCase().includes(search.toLowerCase()) ||
+    i.domain?.toLowerCase().includes(search.toLowerCase()) ||
+    i.country?.toLowerCase().includes(search.toLowerCase()) ||
+    i.industry?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const totalSignals = items.reduce((acc, i) => acc + (i.signal_count || 0), 0);
 
   return (
     <div>
@@ -85,63 +122,76 @@ export default function WatchlistPage() {
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:24, flexWrap:"wrap", gap:12 }}>
         <div>
           <h1 style={{ fontSize:28, fontWeight:900, color:"#fff", marginBottom:4 }}>Watchlist</h1>
-          <p style={{ color:"#737373", fontSize:13 }}>Monitor companies for web changes — hiring, expansions, pricing shifts, leadership moves.</p>
+          <p style={{ color:"#737373", fontSize:13 }}>
+            Monitor companies for hiring spikes, country expansions, and new product launches.
+          </p>
         </div>
-        <button onClick={() => setShowForm(f => !f)} style={{
-          padding:"10px 22px", borderRadius:6,
-          background: showForm ? "rgba(255,255,255,0.08)" : "#E50914",
-          color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer", border:"none",
-        }}>
-          {showForm ? "Cancel" : "+ Add Company"}
-        </button>
+        <div style={{ display:"flex", gap:10 }}>
+          <button onClick={async () => {
+            const r = await apiFetch("/detect/scan-all", { method:"POST" });
+            showT(r.message || "Scanning all companies…", "success");
+          }} style={{
+            padding:"10px 18px", borderRadius:6, background:"rgba(0,113,235,0.12)",
+            border:"1px solid rgba(0,113,235,0.3)", color:"#0071eb",
+            fontWeight:700, fontSize:13, cursor:"pointer",
+          }}>
+            🔍 Scan All
+          </button>
+          <button onClick={() => setShowForm(f => !f)} style={{
+            padding:"10px 22px", borderRadius:6,
+            background: showForm ? "rgba(255,255,255,0.08)" : "#E50914",
+            color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer", border:"none",
+          }}>
+            {showForm ? "Cancel" : "+ Add Company"}
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
       <div style={{ display:"flex", gap:10, marginBottom:24, flexWrap:"wrap" }}>
-        <div style={{ background:"#1a1a1a", border:"1px solid rgba(255,255,255,0.06)", borderRadius:6, padding:"14px 22px" }}>
-          <div style={{ fontSize:24, fontWeight:900, color:"#fff" }}>{items.length}</div>
-          <div style={{ fontSize:11, color:"#737373", marginTop:2 }}>Companies Watched</div>
-        </div>
-        <div style={{ background:"#1a1a1a", border:"1px solid rgba(255,255,255,0.06)", borderRadius:6, padding:"14px 22px" }}>
-          <div style={{ fontSize:24, fontWeight:900, color:"#E50914" }}>
-            {[...new Set(items.map(i => i.country).filter(Boolean))].length}
+        {[
+          { label:"Companies Watched", value:items.length, color:"#fff" },
+          { label:"Active Signals", value:totalSignals, color:"#E50914" },
+          { label:"Countries", value:[...new Set(items.map(i => i.country).filter(Boolean))].length, color:"#0071eb" },
+          { label:"Industries", value:[...new Set(items.map(i => i.industry).filter(Boolean))].length, color:"#f5a623" },
+        ].map(s => (
+          <div key={s.label} style={{ background:"#1a1a1a", border:"1px solid rgba(255,255,255,0.06)", borderRadius:6, padding:"14px 22px", minWidth:120 }}>
+            <div style={{ fontSize:24, fontWeight:900, color:s.color }}>{s.value}</div>
+            <div style={{ fontSize:11, color:"#737373", marginTop:2 }}>{s.label}</div>
           </div>
-          <div style={{ fontSize:11, color:"#737373", marginTop:2 }}>Countries</div>
-        </div>
-        <div style={{ background:"#1a1a1a", border:"1px solid rgba(255,255,255,0.06)", borderRadius:6, padding:"14px 22px" }}>
-          <div style={{ fontSize:24, fontWeight:900, color:"#f5a623" }}>
-            {[...new Set(items.map(i => i.industry).filter(Boolean))].length}
-          </div>
-          <div style={{ fontSize:11, color:"#737373", marginTop:2 }}>Industries</div>
-        </div>
+        ))}
       </div>
 
-      {/* What we monitor */}
-      {!showForm && items.length === 0 && !loading && (
-        <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:24 }}>
-          {SIGNAL_TYPES.map(t => (
-            <div key={t.key} style={{ background:t.color+"12", border:`1px solid ${t.color}22`, borderRadius:20, padding:"6px 14px", display:"flex", alignItems:"center", gap:6, fontSize:12 }}>
-              <span>{t.icon}</span>
-              <span style={{ color:t.color, fontWeight:600 }}>{t.label}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* What we detect */}
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:20 }}>
+        {[
+          { icon:"📈", label:"Hiring Spike", color:"#E50914" },
+          { icon:"🌍", label:"Country Expansion", color:"#0071eb" },
+          { icon:"🚀", label:"New Product", color:"#46d369" },
+          { icon:"💰", label:"Pricing Change", color:"#f5a623" },
+          { icon:"👤", label:"Leadership Change", color:"#a855f7" },
+        ].map(t => (
+          <div key={t.label} style={{ background:t.color+"10", border:`1px solid ${t.color}22`, borderRadius:20, padding:"5px 12px", display:"flex", alignItems:"center", gap:5, fontSize:12 }}>
+            <span>{t.icon}</span>
+            <span style={{ color:t.color, fontWeight:600 }}>{t.label}</span>
+          </div>
+        ))}
+      </div>
 
       {/* Add company form */}
       {showForm && (
         <div style={{ background:"#141414", border:"1px solid rgba(229,9,20,0.2)", borderRadius:8, padding:"24px", marginBottom:24 }}>
           <div style={{ fontSize:15, fontWeight:700, color:"#fff", marginBottom:18 }}>Add Company to Watchlist</div>
-          <form onSubmit={add} style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+          <form onSubmit={add} style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14 }}>
             <div>
               <label style={S.label}>COMPANY NAME *</label>
               <input style={S.input} placeholder="e.g. Freshworks" value={form.company_name}
                 onChange={e => setForm(f => ({ ...f, company_name:e.target.value }))} required />
             </div>
             <div>
-              <label style={S.label}>WEBSITE</label>
-              <input style={S.input} placeholder="freshworks.com" value={form.website}
-                onChange={e => setForm(f => ({ ...f, website:e.target.value }))} />
+              <label style={S.label}>DOMAIN</label>
+              <input style={S.input} placeholder="freshworks.com" value={form.domain}
+                onChange={e => setForm(f => ({ ...f, domain:e.target.value }))} />
             </div>
             <div>
               <label style={S.label}>INDUSTRY</label>
@@ -151,19 +201,39 @@ export default function WatchlistPage() {
               </select>
             </div>
             <div>
-              <label style={S.label}>COUNTRY</label>
+              <label style={S.label}>HQ COUNTRY</label>
               <input style={S.input} placeholder="e.g. USA" value={form.country}
                 onChange={e => setForm(f => ({ ...f, country:e.target.value }))} />
             </div>
-            <div style={{ gridColumn:"1/-1" }}>
+            <div>
+              <label style={S.label}>PRIORITY</label>
+              <select style={S.input} value={form.priority}
+                onChange={e => setForm(f => ({ ...f, priority:e.target.value }))}>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+            <div style={{ display:"flex", alignItems:"flex-end" }}>
               <button type="submit" disabled={adding} style={{
-                width:"100%", padding:"13px", borderRadius:6, background:"#E50914", color:"#fff",
-                fontWeight:700, fontSize:14, cursor:"pointer", border:"none", opacity: adding ? 0.7 : 1,
+                width:"100%", padding:"10px 18px", borderRadius:6, background:"#E50914", color:"#fff",
+                fontWeight:700, fontSize:13, cursor:"pointer", border:"none", opacity: adding ? 0.7 : 1,
               }}>
-                {adding ? "Adding…" : "Add to Watchlist →"}
+                {adding ? "Adding…" : "Add Company →"}
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Search */}
+      {items.length > 0 && (
+        <div style={{ marginBottom:16 }}>
+          <input
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search by company, domain, country, or industry…"
+            style={{ ...S.input, maxWidth:400 }}
+          />
         </div>
       )}
 
@@ -179,8 +249,8 @@ export default function WatchlistPage() {
         <div style={{ background:"#1a1a1a", borderRadius:8, padding:"72px 32px", textAlign:"center", border:"1px solid rgba(255,255,255,0.06)" }}>
           <div style={{ fontSize:56, marginBottom:16 }}>👁</div>
           <div style={{ fontSize:20, fontWeight:800, color:"#fff", marginBottom:8 }}>No companies on watchlist</div>
-          <div style={{ color:"#737373", fontSize:14, maxWidth:360, margin:"0 auto 24px" }}>
-            Add competitor or target companies to get alerted when they post new jobs, expand to new markets, or change pricing.
+          <div style={{ color:"#737373", fontSize:14, maxWidth:400, margin:"0 auto 24px" }}>
+            Add competitors or target companies to detect hiring spikes, country expansions, and product launches automatically.
           </div>
           <button onClick={() => setShowForm(true)} style={{ padding:"13px 32px", borderRadius:24, background:"#E50914", color:"#fff", fontWeight:700, fontSize:14, cursor:"pointer", border:"none" }}>
             + Add First Company
@@ -188,75 +258,153 @@ export default function WatchlistPage() {
         </div>
       )}
 
-      {/* Company cards */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(320px,1fr))", gap:12 }}>
-        {items.map(item => {
-          const avatarColor = AVATAR_COLORS[(item.company_name?.charCodeAt(0) || 0) % AVATAR_COLORS.length];
-          return (
-            <div key={item.id} style={{
-              background:"#1a1a1a", border:"1px solid rgba(255,255,255,0.07)",
-              borderRadius:8, padding:"20px 22px",
-              transition:"background 0.15s, border-color 0.2s",
-            }}
-              onMouseEnter={e => { e.currentTarget.style.background="#222"; e.currentTarget.style.borderColor="rgba(255,255,255,0.12)"; }}
-              onMouseLeave={e => { e.currentTarget.style.background="#1a1a1a"; e.currentTarget.style.borderColor="rgba(255,255,255,0.07)"; }}
-            >
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                  <div style={{
-                    width:44, height:44, borderRadius:8, background:avatarColor,
-                    display:"flex", alignItems:"center", justifyContent:"center",
-                    fontWeight:900, fontSize:18, color:"#fff",
-                  }}>
-                    {item.company_name?.[0]?.toUpperCase() || "?"}
-                  </div>
-                  <div>
-                    <div style={{ fontSize:15, fontWeight:700, color:"#fff" }}>{item.company_name}</div>
-                    {item.website && (
-                      <a href={`https://${item.website}`} target="_blank" rel="noreferrer"
-                        style={{ fontSize:12, color:"#737373", textDecoration:"underline" }}>
-                        {item.website}
-                      </a>
-                    )}
-                  </div>
-                </div>
-                <button onClick={() => remove(item.id, item.company_name)} style={{
-                  padding:"6px 12px", borderRadius:20, background:"transparent",
-                  border:"1px solid rgba(229,9,20,0.2)", color:"#E50914",
-                  fontSize:11, cursor:"pointer", fontWeight:600,
-                }}>
-                  Remove
-                </button>
-              </div>
+      {/* Table */}
+      {!loading && filtered.length > 0 && (
+        <div style={{ background:"#1a1a1a", border:"1px solid rgba(255,255,255,0.06)", borderRadius:8, overflow:"hidden" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead>
+              <tr style={{ background:"rgba(0,0,0,0.3)" }}>
+                <th style={S.th}>COMPANY</th>
+                <th style={S.th}>DOMAIN</th>
+                <th style={S.th}>INDUSTRY</th>
+                <th style={S.th}>COUNTRY</th>
+                <th style={S.th}>PRIORITY</th>
+                <th style={S.th}>SIGNALS</th>
+                <th style={S.th}>MONITORING</th>
+                <th style={S.th}>LAST SCANNED</th>
+                <th style={S.th}>ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(item => {
+                const pm = PRIORITY_META[item.priority] || PRIORITY_META.medium;
+                const isScanning = scanning[item.id];
+                const scanResult = scanResults[item.id];
+                const lastScanned = item.last_scanned
+                  ? new Date(item.last_scanned).toLocaleDateString("en-IN", { day:"numeric", month:"short" })
+                  : "Never";
 
-              <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                {item.industry && (
-                  <span style={{ background:"rgba(229,9,20,0.1)", color:"#E50914", padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:700 }}>
-                    {item.industry}
-                  </span>
-                )}
-                {item.country && (
-                  <span style={{ color:"#737373", fontSize:12, display:"flex", alignItems:"center", gap:4 }}>
-                    📍 {item.country}
-                  </span>
-                )}
-              </div>
+                return (
+                  <tr key={item.id}
+                    onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.02)"}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                  >
+                    <td style={S.td}>
+                      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                        <div style={{
+                          width:36, height:36, borderRadius:6, flexShrink:0,
+                          background:["#E50914","#0071eb","#f5a623","#46d369","#a855f7","#58a6ff"][(item.company_name?.charCodeAt(0)||0)%6],
+                          display:"flex", alignItems:"center", justifyContent:"center",
+                          fontWeight:900, fontSize:15, color:"#fff",
+                        }}>
+                          {item.company_name?.[0]?.toUpperCase() || "?"}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight:700, color:"#fff", fontSize:14 }}>{item.company_name}</div>
+                          {item.notes && <div style={{ fontSize:11, color:"#737373" }}>{item.notes.slice(0,30)}</div>}
+                        </div>
+                      </div>
+                    </td>
+                    <td style={S.td}>
+                      {item.domain ? (
+                        <a href={`https://${item.domain}`} target="_blank" rel="noreferrer"
+                          style={{ color:"#737373", fontSize:12, textDecoration:"underline" }}>
+                          {item.domain}
+                        </a>
+                      ) : <span style={{ color:"#3a3a3a" }}>—</span>}
+                    </td>
+                    <td style={S.td}>
+                      {item.industry && (
+                        <span style={{ background:"rgba(229,9,20,0.08)", color:"#E50914", padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:700 }}>
+                          {item.industry}
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ ...S.td, fontSize:13, color:"#b3b3b3" }}>
+                      {item.country || "—"}
+                    </td>
+                    <td style={S.td}>
+                      <span style={{ background:pm.bg, color:pm.color, padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:700 }}>
+                        {pm.label}
+                      </span>
+                    </td>
+                    <td style={S.td}>
+                      {item.signal_count > 0 ? (
+                        <span style={{
+                          background:"rgba(229,9,20,0.12)", color:"#E50914",
+                          fontWeight:800, fontSize:15, padding:"2px 10px", borderRadius:20,
+                        }}>
+                          {item.signal_count}
+                        </span>
+                      ) : (
+                        <span style={{ color:"#3a3a3a", fontSize:12 }}>0</span>
+                      )}
+                    </td>
+                    <td style={S.td}>
+                      <div style={{ display:"flex", gap:6 }}>
+                        {item.watch_hiring    && <span title="Hiring Spike"    style={{ fontSize:14 }}>📈</span>}
+                        {item.watch_expansion && <span title="Expansion"       style={{ fontSize:14 }}>🌍</span>}
+                        {item.watch_pricing   && <span title="Pricing Change"  style={{ fontSize:14 }}>💰</span>}
+                      </div>
+                    </td>
+                    <td style={{ ...S.td, fontSize:12, color:"#737373" }}>
+                      {isScanning ? (
+                        <div style={{ display:"flex", alignItems:"center", gap:6, color:"#0071eb" }}>
+                          <div style={{ width:12, height:12, border:"2px solid #0071eb", borderTopColor:"transparent", borderRadius:"50%", animation:"spin 0.7s linear infinite" }}/>
+                          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+                          Scanning…
+                        </div>
+                      ) : (
+                        <>
+                          {lastScanned}
+                          {scanResult !== undefined && (
+                            <div style={{ fontSize:11, color: scanResult > 0 ? "#46d369" : "#737373", marginTop:2 }}>
+                              {scanResult > 0 ? `+${scanResult} new` : "No changes"}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </td>
+                    <td style={S.td}>
+                      <div style={{ display:"flex", gap:6 }}>
+                        <button onClick={() => scanNow(item)} disabled={isScanning}
+                          style={{
+                            padding:"5px 12px", borderRadius:4, fontSize:11, fontWeight:700,
+                            background: isScanning ? "transparent" : "rgba(0,113,235,0.12)",
+                            border:"1px solid rgba(0,113,235,0.3)", color:"#0071eb",
+                            cursor: isScanning ? "not-allowed" : "pointer",
+                          }}>
+                          {isScanning ? "…" : "Scan"}
+                        </button>
+                        <a href="/dashboard" style={{
+                          padding:"5px 12px", borderRadius:4, fontSize:11, fontWeight:700,
+                          background:"rgba(70,211,105,0.08)", border:"1px solid rgba(70,211,105,0.2)",
+                          color:"#46d369", textDecoration:"none",
+                        }}>
+                          Signals
+                        </a>
+                        <button onClick={() => remove(item.id, item.company_name)} style={{
+                          padding:"5px 12px", borderRadius:4, fontSize:11, fontWeight:700,
+                          background:"transparent", border:"1px solid rgba(229,9,20,0.2)",
+                          color:"#E50914", cursor:"pointer",
+                        }}>
+                          ✕
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
 
-              {/* What we track */}
-              <div style={{ marginTop:14, paddingTop:14, borderTop:"1px solid rgba(255,255,255,0.06)" }}>
-                <div style={{ fontSize:10, color:"#3a3a3a", fontWeight:700, letterSpacing:"0.1em", marginBottom:8 }}>MONITORING</div>
-                <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                  {SIGNAL_TYPES.slice(0,4).map(t => (
-                    <span key={t.key} style={{ fontSize:11, color:"#737373", display:"flex", alignItems:"center", gap:3 }}>
-                      {t.icon} {t.label}
-                    </span>
-                  ))}
-                </div>
-              </div>
+          {filtered.length === 0 && search && (
+            <div style={{ padding:"32px", textAlign:"center", color:"#737373", fontSize:13 }}>
+              No companies match "{search}"
             </div>
-          );
-        })}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

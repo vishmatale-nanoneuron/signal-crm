@@ -72,6 +72,8 @@ class WebSignal(Base):
     score: Mapped[int] = mapped_column(Integer, default=5)
     is_actioned: Mapped[bool] = mapped_column(Boolean, default=False)
     is_dismissed: Mapped[bool] = mapped_column(Boolean, default=False)
+    before_snapshot: Mapped[str] = mapped_column(Text, default="")
+    after_snapshot: Mapped[str] = mapped_column(Text, default="")
     detected_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -118,6 +120,39 @@ class Lead(Base):
     score: Mapped[int] = mapped_column(Integer, default=5)
     notes: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class TrackedPage(Base):
+    """Stores pages we scrape for each watchlist company."""
+    __tablename__ = "tracked_pages"
+    __table_args__ = (Index("ix_tracked_pages_account_id", "account_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    account_id: Mapped[str] = mapped_column(String(36), ForeignKey("watchlist_accounts.id", ondelete="CASCADE"), nullable=False)
+    page_type: Mapped[str] = mapped_column(String(50), default="")        # careers | sitemap | products
+    url: Mapped[str] = mapped_column(String(500), default="")
+    content_hash: Mapped[str] = mapped_column(String(64), default="")    # MD5 of last content
+    content_text: Mapped[str] = mapped_column(Text, default="")          # last content excerpt ("before")
+    country_keys: Mapped[str] = mapped_column(Text, default="")          # JSON list of country slugs found
+    product_keys: Mapped[str] = mapped_column(Text, default="")          # JSON list of product names found
+    job_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_scanned_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class PageSnapshot(Base):
+    """Before/after snapshot attached to a detected signal."""
+    __tablename__ = "page_snapshots"
+    __table_args__ = (Index("ix_snapshots_signal_id", "signal_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    signal_id: Mapped[str] = mapped_column(String(36), ForeignKey("web_signals.id", ondelete="CASCADE"), nullable=False)
+    tracked_page_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("tracked_pages.id", ondelete="SET NULL"), nullable=True)
+    before_content: Mapped[str] = mapped_column(Text, default="")
+    after_content: Mapped[str] = mapped_column(Text, default="")
+    change_type: Mapped[str] = mapped_column(String(50), default="")
+    change_details: Mapped[str] = mapped_column(Text, default="")
+    snapshot_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class ComplianceSave(Base):
