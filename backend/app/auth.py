@@ -237,6 +237,12 @@ async def login(req: LoginReq, db: AsyncSession = Depends(get_db)):
         raise HTTPException(401, "Invalid email or password")
     if not user.is_active:
         raise HTTPException(403, "Account disabled. Contact support@nanoneuron.ai")
+    # Record last login time
+    try:
+        user.last_login_at = datetime.utcnow()
+        await db.commit()
+    except Exception:
+        await db.rollback()
     return {
         "success": True,
         "token": create_token(user.id),
@@ -244,19 +250,29 @@ async def login(req: LoginReq, db: AsyncSession = Depends(get_db)):
             "id": user.id, "name": user.name, "email": user.email,
             "credits": user.credits, "plan": user.plan, "is_paid": user.is_paid,
             "company": user.company_name,
+            "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
         },
         "trial": _trial_info(user),
     }
 
 
 @auth.get("/me")
-async def me(user: User = Depends(get_user_no_trial_check)):
+async def me(user: User = Depends(get_user_no_trial_check), db: AsyncSession = Depends(get_db)):
     return {
         "success": True,
         "user": {
-            "id": user.id, "name": user.name, "email": user.email,
-            "credits": user.credits, "plan": user.plan, "is_paid": user.is_paid,
-            "company": user.company_name,
+            "id":            user.id,
+            "name":          user.name,
+            "email":         user.email,
+            "company":       user.company_name,
+            "phone":         getattr(user, "phone", ""),
+            "avatar_url":    getattr(user, "avatar_url", ""),
+            "credits":       user.credits,
+            "plan":          user.plan,
+            "is_paid":       user.is_paid,
+            "is_verified":   getattr(user, "is_verified", True),
+            "created_at":    user.created_at.isoformat(),
+            "last_login_at": user.last_login_at.isoformat() if getattr(user, "last_login_at", None) else None,
         },
         "trial": _trial_info(user),
     }
