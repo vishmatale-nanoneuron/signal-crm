@@ -30,6 +30,17 @@ settings = get_settings()
 # ---------------------------------------------------------------------------
 _rate_store: dict[str, list[float]] = defaultdict(list)
 
+def _get_real_ip(request: Request) -> str:
+    """Extract real client IP — respects Railway/Fastly CDN X-Forwarded-For."""
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    cf_ip = request.headers.get("CF-Connecting-IP", "")
+    if cf_ip:
+        return cf_ip
+    return request.client.host if request.client else "unknown"
+
+
 def _is_rate_limited(ip: str, path: str) -> bool:
     """Return True if this IP should be blocked.
 
@@ -51,7 +62,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
     """Add security headers + rate limiting to every response."""
 
     async def dispatch(self, request: Request, call_next):
-        ip = request.client.host if request.client else "unknown"
+        ip = _get_real_ip(request)
 
         # Rate limiting
         if _is_rate_limited(ip, request.url.path):
@@ -118,7 +129,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Signal CRM API",
-    version="2.1.0",
+    version="3.0.0",
     lifespan=lifespan,
     description="Privacy-aware cross-border signal CRM — Turn web changes into sales actions.",
     docs_url="/docs",
@@ -156,12 +167,20 @@ async def health():
     return {
         "status": "healthy",
         "app": "Signal CRM",
-        "version": "2.1.0",
+        "version": "3.0.0",
         "security": "hardened",
         "modules": [
             "auth", "signals", "watchlist", "buyer-map",
-            "compliance", "deals", "leads", "next-actions", "payment",
+            "compliance", "deals", "leads", "next-actions",
+            "payment", "analytics", "email-templates", "country-intel",
+            "detection-engine", "ai-chat",
         ],
+        "detection": {
+            "hiring_spike": True,
+            "country_page": True,
+            "new_product": True,
+        },
+        "ai": "gpt-4o-mini (with rule-based fallback)",
     }
 
 
