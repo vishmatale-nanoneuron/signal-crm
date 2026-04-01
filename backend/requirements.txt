@@ -12,3 +12,4 @@ python-multipart==0.0.12
 razorpay==1.4.2
 beautifulsoup4==4.12.3
 openai>=1.50.0
+apscheduler==3.10.4

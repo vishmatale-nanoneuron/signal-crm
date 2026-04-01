@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database import get_db
 from app.auth import get_current_user
-from app.models import User, WebSignal, WatchlistAccount
+from app.models import User, WebSignal, WatchlistAccount, Deal
 
 signals_router = APIRouter(prefix="/signals", tags=["Signals"])
 
@@ -141,15 +141,6 @@ async def list_signals(signal_type: str = Query(None), country: str = Query(None
     return {"success": True, "signals": [_signal_dict(s) for s in signals], "total": len(signals)}
 
 
-@signals_router.get("/{signal_id}")
-async def get_signal(signal_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    r = await db.execute(select(WebSignal).where(WebSignal.id == signal_id, WebSignal.user_id == user.id))
-    s = r.scalar_one_or_none()
-    if not s:
-        raise HTTPException(404, "Signal not found")
-    return {"success": True, "signal": _signal_dict(s, detail=True)}
-
-
 @signals_router.post("/seed")
 async def seed_signals(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     existing = await db.execute(select(WebSignal).where(WebSignal.user_id == user.id).limit(1))
@@ -218,3 +209,110 @@ async def dismiss_signal(signal_id: str, user: User = Depends(get_current_user),
     s.is_dismissed = True
     await db.commit()
     return {"success": True, "message": "Dismissed."}
+
+
+@signals_router.get("/action-plan")
+async def action_plan(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Return today's top 3 priority actions based on high-score unactioned signals."""
+    r = await db.execute(
+        select(WebSignal)
+        .where(WebSignal.user_id == user.id, WebSignal.is_dismissed == False,
+               WebSignal.is_actioned == False)
+        .order_by(WebSignal.score.desc(), WebSignal.detected_at.desc())
+        .limit(3)
+    )
+    signals = r.scalars().all()
+
+    urgency_map = {
+        "hiring_spike":      ("Contact them NOW — hiring windows close in 60-90 days.", "high"),
+        "new_country_page":  ("First-mover wins — reach out before competitors notice.", "high"),
+        "pricing_change":    ("Strike while their customers are unhappy — today.", "high"),
+        "new_product":       ("New product = new budget = new buying decision.", "medium"),
+        "compliance_update": ("Compliance deadlines create urgency — offer help.", "medium"),
+        "leadership_change": ("New leaders = new priorities. First 90 days matter.", "medium"),
+        "partner_page":      ("Partnership hubs = warm intro opportunities.", "low"),
+    }
+
+    actions = []
+    for i, s in enumerate(signals, 1):
+        why, urgency = urgency_map.get(s.signal_type, ("Act on this signal now.", "medium"))
+        actions.append({
+            "rank": i,
+            "signal_id": s.id,
+            "company": s.account_name,
+            "signal_type": s.signal_type,
+            "title": s.title,
+            "score": s.score,
+            "strength": s.signal_strength,
+            "action": s.recommended_action,
+            "why_now": why,
+            "urgency": urgency,
+            "country": s.country_hint,
+        })
+
+    # Impact streak
+    actioned_r = await db.execute(
+        select(WebSignal)
+        .where(WebSignal.user_id == user.id, WebSignal.is_actioned == True,
+               WebSignal.detected_at >= datetime.utcnow() - timedelta(days=30))
+        .order_by(WebSignal.detected_at.desc())
+    )
+    actioned = actioned_r.scalars().all()
+    days_with_action = set()
+    for s in actioned:
+        days_with_action.add(s.detected_at.date())
+    streak = 0
+    today_date = datetime.utcnow().date()
+    for i in range(30):
+        if (today_date - timedelta(days=i)) in days_with_action:
+            streak += 1
+        else:
+            break
+
+    # Revenue impact
+    deals_r = await db.execute(select(Deal).where(Deal.user_id == user.id))
+    all_deals = deals_r.scalars().all()
+    pipeline_val = sum(d.value for d in all_deals if d.stage not in ("lost",))
+    won_val      = sum(d.value for d in all_deals if d.stage == "won")
+
+    total_sigs_r = await db.execute(
+        select(WebSignal).where(WebSignal.user_id == user.id, WebSignal.is_dismissed == False)
+    )
+    total_sigs = len(total_sigs_r.scalars().all())
+
+    return {
+        "success": True,
+        "date": datetime.utcnow().strftime("%A, %d %B %Y"),
+        "actions": actions,
+        "streak": streak,
+        "stats": {
+            "total_signals": total_sigs,
+            "actioned_signals": len(actioned),
+            "pipeline_value": pipeline_val,
+            "won_value": won_val,
+            "active_deals": len([d for d in all_deals if d.stage not in ("won","lost")]),
+        },
+        "motivation": _get_motivation(streak, total_sigs, len(actioned)),
+    }
+
+
+@signals_router.get("/{signal_id}")
+async def get_signal(signal_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    r = await db.execute(select(WebSignal).where(WebSignal.id == signal_id, WebSignal.user_id == user.id))
+    s = r.scalar_one_or_none()
+    if not s:
+        raise HTTPException(404, "Signal not found")
+    return {"success": True, "signal": _signal_dict(s, detail=True)}
+
+
+def _get_motivation(streak: int, total: int, actioned: int) -> str:
+    rate = int((actioned / total * 100)) if total else 0
+    if streak >= 7:
+        return f"🔥 {streak}-day streak! You're in the top 5% of Signal users."
+    if streak >= 3:
+        return f"⚡ {streak} days in a row! Momentum builds deals."
+    if rate >= 80:
+        return "💪 {rate}% action rate — elite seller territory."
+    if actioned == 0:
+        return "🎯 Action one signal today — that's all it takes to build a streak."
+    return f"📈 {actioned} signals actioned. Each one is a door opened."

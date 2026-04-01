@@ -393,7 +393,8 @@ RULES:
         )
         return {"success": True, "message": result.choices[0].message.content, "source": "gpt-4o-mini"}
 
-    except Exception:
+    except Exception as e:
+        print(f"[AI Chat] OpenAI error: {type(e).__name__}: {e}")
         if signals:
             s = signals[0]
             return {"success": True, "message": f"AI temporarily unavailable.\n\nYour top signal: **{s.account_name}** — {s.title}. Score: {s.score}/10.\n\nRecommended action: {s.recommended_action}", "source": "fallback"}

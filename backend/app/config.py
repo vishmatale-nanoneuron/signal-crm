@@ -21,6 +21,13 @@ class Settings(BaseSettings):
     BANK_SWIFT_ADDRESS: str = "Axis Bank Ltd, Tilekar Road Branch, Pune, Maharashtra, India"
     BANK_USD_ACCOUNT: str = ""
     BANK_EUR_ACCOUNT: str = ""
+    # Email / SMTP (for daily digest + signal alerts)
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    FROM_EMAIL: str = "signal@nanoneuron.ai"
+    FROM_NAME: str = "Signal CRM"
 
     def get_async_db_url(self) -> str:
         """Ensure postgresql+asyncpg:// driver prefix for SQLAlchemy async engine"""

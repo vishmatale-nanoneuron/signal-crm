@@ -100,14 +100,30 @@ class SecurityMiddleware(BaseHTTPMiddleware):
 
 
 async def _bg_init_db():
-    """Background task: create tables with retries, non-blocking for startup."""
+    """Background task: create tables + run column migrations, non-blocking for startup."""
     await asyncio.sleep(3)
     for attempt in range(10):
         try:
             async with engine.connect() as conn:
                 await conn.run_sync(Base.metadata.create_all)
                 await conn.commit()
-            print("✓ Signal CRM — DB tables ready")
+
+            # Column migrations — safe to run repeatedly (IF NOT EXISTS)
+            migrations = [
+                "ALTER TABLE web_signals ADD COLUMN IF NOT EXISTS before_snapshot TEXT DEFAULT ''",
+                "ALTER TABLE web_signals ADD COLUMN IF NOT EXISTS after_snapshot TEXT DEFAULT ''",
+                "ALTER TABLE tracked_pages ADD COLUMN IF NOT EXISTS country_keys TEXT DEFAULT '[]'",
+                "ALTER TABLE tracked_pages ADD COLUMN IF NOT EXISTS product_keys TEXT DEFAULT '[]'",
+            ]
+            async with engine.connect() as conn:
+                for sql in migrations:
+                    try:
+                        await conn.execute(__import__("sqlalchemy").text(sql))
+                    except Exception as me:
+                        print(f"⚠ Migration skipped ({type(me).__name__}): {sql[:60]}")
+                await conn.commit()
+
+            print("✓ Signal CRM — DB tables ready + migrations applied")
             return
         except Exception as e:
             print(f"⚠ DB init attempt {attempt + 1}/10: {type(e).__name__} — retrying in 15s")
@@ -117,19 +133,24 @@ async def _bg_init_db():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    env    = os.environ.get("RAILWAY_ENVIRONMENT", "local")
+    env     = os.environ.get("RAILWAY_ENVIRONMENT", "local")
     db_hint = os.environ.get("DATABASE_URL", "")[:40]
-    print(f"✓ Signal CRM v3.0 starting — env={env} db={db_hint}...")
+    print(f"✓ Signal CRM v3.1 starting — env={env} db={db_hint}...")
     asyncio.ensure_future(_bg_init_db())
-    print("✓ Signal CRM v2.1 ready")
+    # Start background scheduler (daily scans + digest emails)
+    from app.scheduler import start_scheduler
+    _scheduler = start_scheduler()
+    print("✓ Signal CRM v3.1 ready")
     yield
+    if _scheduler:
+        _scheduler.shutdown(wait=False)
     await engine.dispose()
     print("Signal CRM — Shutdown")
 
 
 app = FastAPI(
     title="Signal CRM API",
-    version="3.0.0",
+    version="3.1.0",
     lifespan=lifespan,
     description="Privacy-aware cross-border signal CRM — Turn web changes into sales actions.",
     docs_url="/docs",
@@ -167,7 +188,7 @@ async def health():
     return {
         "status": "healthy",
         "app": "Signal CRM",
-        "version": "3.0.0",
+        "version": "3.1.0",
         "security": "hardened",
         "modules": [
             "auth", "signals", "watchlist", "buyer-map",
