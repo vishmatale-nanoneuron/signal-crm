@@ -19,6 +19,8 @@ from app.next_action import next_action_router
 from app.payment import payment_router
 from app.leads import leads_router
 from app.country_intel import country_intel_router
+from app.analytics import analytics_router
+from app.email_templates import email_router
 
 settings = get_settings()
 
@@ -143,6 +145,7 @@ for router in [
     auth, watchlist_router, signals_router, buyer_map_router,
     compliance_router, deals_router, next_action_router,
     payment_router, leads_router, country_intel_router,
+    analytics_router, email_router,
 ]:
     app.include_router(router, prefix="/api")
 

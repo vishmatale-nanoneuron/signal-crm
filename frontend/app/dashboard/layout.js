@@ -4,14 +4,16 @@ import { useRouter, usePathname } from "next/navigation";
 import { getUser, logout, apiFetch, getLogoutReason } from "../../lib/api";
 
 const NAV = [
-  { href: "/dashboard",              label: "Home" },
-  { href: "/dashboard/watchlist",    label: "Watchlist" },
-  { href: "/dashboard/leads",        label: "Leads" },
-  { href: "/dashboard/buyer-map",    label: "Buyer Map" },
-  { href: "/dashboard/compliance",   label: "Compliance" },
-  { href: "/dashboard/deals",        label: "Deals" },
-  { href: "/dashboard/next-actions", label: "Next Actions" },
-  { href: "/dashboard/country-intel", label: "Country Intel" },
+  { href: "/dashboard",                  label: "Home" },
+  { href: "/dashboard/analytics",        label: "Analytics" },
+  { href: "/dashboard/watchlist",        label: "Watchlist" },
+  { href: "/dashboard/leads",            label: "Leads" },
+  { href: "/dashboard/buyer-map",        label: "Buyer Map" },
+  { href: "/dashboard/compliance",       label: "Compliance" },
+  { href: "/dashboard/deals",            label: "Deals" },
+  { href: "/dashboard/next-actions",     label: "Next Actions" },
+  { href: "/dashboard/country-intel",    label: "Country Intel" },
+  { href: "/dashboard/email-templates",  label: "Email Templates" },
 ];
 
 const FREE_PATHS = ["/dashboard/payment"];
