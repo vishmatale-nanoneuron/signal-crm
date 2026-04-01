@@ -6,7 +6,15 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/signal_crm"
     JWT_SECRET: str = "SignalCRM2026SecretKeyChangeInProd"
     JWT_ALGORITHM: str = "HS256"
-    CORS_ORIGINS: list[str] = ["http://localhost:3000", "https://nanoneuron.ai", "https://www.nanoneuron.ai"]
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "https://nanoneuron.ai",
+        "https://www.nanoneuron.ai",
+        "https://signal.nanoneuron.ai",
+        "https://signal-crm.nanoneuron.ai",
+        "https://signal-crm-frontend.pages.dev",
+    ]
     EXTRA_CORS_ORIGINS: str = ""
     ANTHROPIC_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
