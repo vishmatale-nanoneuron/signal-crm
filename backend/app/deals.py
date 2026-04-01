@@ -45,6 +45,27 @@ async def list_deals(user: User = Depends(get_current_user), db: AsyncSession = 
     return {"success": True, "deals": [_fmt(d) for d in deals], "total": len(deals)}
 
 
+@deals_router.get("/export/csv-data")
+async def export_deals(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Return deals as JSON for client-side CSV export."""
+    r = await db.execute(select(Deal).where(Deal.user_id == user.id).order_by(Deal.updated_at.desc()))
+    deals = r.scalars().all()
+    return {
+        "success": True,
+        "rows": [
+            {
+                "Title": d.title, "Company": d.company_name, "Contact": d.contact_name,
+                "Stage": d.stage.title(), "Value": d.value, "Currency": d.currency,
+                "Country": d.country, "Industry": d.industry, "Probability %": d.probability,
+                "Next Action": d.next_action, "Close Date": d.close_date,
+                "Signal Trigger": d.signal_trigger, "Notes": d.notes,
+                "Created": d.created_at.strftime("%Y-%m-%d"),
+            }
+            for d in deals
+        ],
+    }
+
+
 @deals_router.get("/pipeline")
 async def pipeline(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     r = await db.execute(select(Deal).where(Deal.user_id == user.id))

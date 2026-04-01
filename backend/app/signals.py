@@ -180,6 +180,36 @@ async def action_signal(signal_id: str, user: User = Depends(get_current_user), 
     return {"success": True, "message": "Marked as actioned."}
 
 
+@signals_router.get("/export/csv-data")
+async def export_signals(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Return all signals as JSON for client-side CSV export."""
+    r = await db.execute(
+        select(WebSignal)
+        .where(WebSignal.user_id == user.id, WebSignal.is_dismissed == False)
+        .order_by(WebSignal.score.desc(), WebSignal.detected_at.desc())
+    )
+    signals = r.scalars().all()
+    return {
+        "success": True,
+        "rows": [
+            {
+                "Company": s.account_name,
+                "Signal Type": s.signal_type.replace("_", " ").title(),
+                "Strength": s.signal_strength.upper(),
+                "Title": s.title,
+                "Country": s.country_hint,
+                "Score": s.score,
+                "Summary": s.summary,
+                "Proof": s.proof_text,
+                "Recommended Action": s.recommended_action,
+                "Actioned": "Yes" if s.is_actioned else "No",
+                "Detected At": s.detected_at.strftime("%Y-%m-%d %H:%M"),
+            }
+            for s in signals
+        ],
+    }
+
+
 @signals_router.post("/{signal_id}/dismiss")
 async def dismiss_signal(signal_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     r = await db.execute(select(WebSignal).where(WebSignal.id == signal_id, WebSignal.user_id == user.id))

@@ -128,6 +128,17 @@ export default function WatchlistPage() {
         </div>
         <div style={{ display:"flex", gap:10 }}>
           <button onClick={async () => {
+            const r = await apiFetch("/watchlist/seed-demo", { method:"POST" });
+            if (r.success && r.added > 0) { showT(`Added ${r.added} demo companies`); await load(); }
+            else showT("Demo companies already loaded", "info");
+          }} style={{
+            padding:"10px 18px", borderRadius:6, background:"rgba(255,255,255,0.06)",
+            border:"1px solid rgba(255,255,255,0.1)", color:"#737373",
+            fontWeight:700, fontSize:13, cursor:"pointer",
+          }}>
+            ⚡ Demo Companies
+          </button>
+          <button onClick={async () => {
             const r = await apiFetch("/detect/scan-all", { method:"POST" });
             showT(r.message || "Scanning all companies…", "success");
           }} style={{
@@ -252,9 +263,17 @@ export default function WatchlistPage() {
           <div style={{ color:"#737373", fontSize:14, maxWidth:400, margin:"0 auto 24px" }}>
             Add competitors or target companies to detect hiring spikes, country expansions, and product launches automatically.
           </div>
-          <button onClick={() => setShowForm(true)} style={{ padding:"13px 32px", borderRadius:24, background:"#E50914", color:"#fff", fontWeight:700, fontSize:14, cursor:"pointer", border:"none" }}>
-            + Add First Company
-          </button>
+          <div style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap" }}>
+            <button onClick={async () => {
+              const r = await apiFetch("/watchlist/seed-demo", { method:"POST" });
+              if (r.success) { showT(`Added ${r.added} demo companies`); await load(); }
+            }} style={{ padding:"13px 32px", borderRadius:24, background:"rgba(0,113,235,0.15)", border:"1px solid rgba(0,113,235,0.4)", color:"#0071eb", fontWeight:700, fontSize:14, cursor:"pointer" }}>
+              ⚡ Load Demo Companies
+            </button>
+            <button onClick={() => setShowForm(true)} style={{ padding:"13px 32px", borderRadius:24, background:"#E50914", color:"#fff", fontWeight:700, fontSize:14, cursor:"pointer", border:"none" }}>
+              + Add Company
+            </button>
+          </div>
         </div>
       )}
 

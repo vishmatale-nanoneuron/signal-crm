@@ -89,6 +89,37 @@ async def update_account(account_id: str, req: UpdateAccountReq, user: User = De
     return {"success": True, "message": "Updated."}
 
 
+@watchlist_router.post("/seed-demo")
+async def seed_demo_watchlist(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Pre-populate watchlist with 8 famous companies for a quick demo."""
+    DEMO_COMPANIES = [
+        {"company_name":"Freshworks",  "domain":"freshworks.com",  "industry":"SaaS",        "country":"USA",       "hq_country":"India",   "priority":"high",   "watch_hiring":True,  "watch_expansion":True},
+        {"company_name":"Razorpay",    "domain":"razorpay.com",    "industry":"Fintech",      "country":"India",     "hq_country":"India",   "priority":"high",   "watch_hiring":True,  "watch_expansion":True},
+        {"company_name":"Zoho",        "domain":"zoho.com",        "industry":"SaaS",        "country":"USA",       "hq_country":"India",   "priority":"medium", "watch_hiring":True,  "watch_expansion":True},
+        {"company_name":"Infosys",     "domain":"infosys.com",     "industry":"IT Services",  "country":"India",     "hq_country":"India",   "priority":"medium", "watch_hiring":True,  "watch_expansion":True},
+        {"company_name":"Shopify",     "domain":"shopify.com",     "industry":"Ecommerce",    "country":"Canada",    "hq_country":"Canada",  "priority":"medium", "watch_hiring":True,  "watch_expansion":True},
+        {"company_name":"Deel",        "domain":"deel.com",        "industry":"HR Tech",      "country":"USA",       "hq_country":"USA",     "priority":"high",   "watch_hiring":False, "watch_expansion":True},
+        {"company_name":"Stripe",      "domain":"stripe.com",      "industry":"Fintech",      "country":"USA",       "hq_country":"USA",     "priority":"high",   "watch_hiring":False, "watch_expansion":True},
+        {"company_name":"Remote.com",  "domain":"remote.com",      "industry":"HR Tech",      "country":"Netherlands","hq_country":"Netherlands","priority":"medium","watch_hiring":False,"watch_expansion":True},
+    ]
+    existing_r = await db.execute(
+        select(WatchlistAccount.domain).where(WatchlistAccount.user_id == user.id)
+    )
+    existing_domains = {row[0] for row in existing_r.all()}
+    added = 0
+    for c in DEMO_COMPANIES:
+        if c["domain"] not in existing_domains:
+            db.add(WatchlistAccount(
+                user_id=user.id, company_name=c["company_name"], domain=c["domain"],
+                industry=c["industry"], country=c["country"], hq_country=c["hq_country"],
+                priority=c["priority"], watch_hiring=c["watch_hiring"],
+                watch_expansion=c["watch_expansion"], last_checked=datetime.utcnow(),
+            ))
+            added += 1
+    await db.commit()
+    return {"success": True, "added": added, "message": f"Added {added} demo companies to watchlist"}
+
+
 @watchlist_router.delete("/{account_id}")
 async def delete_account(account_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     r = await db.execute(select(WatchlistAccount).where(WatchlistAccount.id == account_id, WatchlistAccount.user_id == user.id))

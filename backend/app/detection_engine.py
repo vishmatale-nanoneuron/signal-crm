@@ -284,6 +284,122 @@ async def ai_analyze(
     return {"success": True, "signal_id": signal_id, "analysis": analysis}
 
 
+class ChatMsg(BaseModel):
+    role: str     # "user" | "assistant"
+    content: str
+
+
+class ChatReq(BaseModel):
+    messages: list[ChatMsg]
+
+
+@ai_router.post("/chat")
+async def ai_chat(
+    req: ChatReq,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Conversational AI assistant with full user context (signals, pipeline)."""
+    from app.config import get_settings
+    from app.models import Deal
+    import os
+
+    settings = get_settings()
+    api_key = settings.OPENAI_API_KEY or os.environ.get("OPENAI_API_KEY", "")
+
+    # Load user's top signals for context
+    sig_r = await db.execute(
+        select(WebSignal)
+        .where(WebSignal.user_id == user.id, WebSignal.is_dismissed == False)
+        .order_by(WebSignal.score.desc())
+        .limit(6)
+    )
+    signals = sig_r.scalars().all()
+    signals_ctx = "\n".join([
+        f"  - {s.account_name}: {s.title} (type={s.signal_type}, score={s.score}/10, country={s.country_hint})"
+        for s in signals
+    ]) or "  No signals detected yet"
+
+    # Pipeline stats
+    deal_r = await db.execute(select(Deal).where(Deal.user_id == user.id))
+    deals = deal_r.scalars().all()
+    active = [d for d in deals if d.stage not in ("won", "lost")]
+    won = [d for d in deals if d.stage == "won"]
+    pipeline_val = sum(d.value for d in active)
+
+    system_prompt = f"""You are Signal AI, a sharp B2B sales assistant built into Signal CRM.
+
+You help {user.name or "this user"} at {user.company_name or "their company"} win cross-border deals.
+Target markets: Indian exporters, IT services firms, SaaS agencies expanding globally.
+
+USER'S LIVE DATA:
+Active signals (top 6):
+{signals_ctx}
+
+Pipeline: {len(active)} active deals | Value: ₹{pipeline_val:,.0f} | Won: {len(won)} deals
+
+WHAT YOU CAN DO:
+- Prioritize which signals to act on (and why)
+- Suggest specific outreach strategies for named companies
+- Draft cold emails or LinkedIn messages
+- Explain compliance rules for any country
+- Recommend next pipeline actions
+- Answer cross-border sales strategy questions
+
+RULES:
+- Be concise and specific — max 4-5 sentences per response
+- Always recommend a concrete next action
+- Reference actual signals/companies from the user's data when relevant
+- Use ₹ for Indian amounts, $ for USD"""
+
+    last_msg = req.messages[-1].content.lower() if req.messages else ""
+
+    # Rule-based fallback (when no API key)
+    if not api_key:
+        if any(w in last_msg for w in ["priorit", "top signal", "act on", "which signal", "best signal"]):
+            if signals:
+                s = signals[0]
+                resp = f"Your #1 signal right now is **{s.account_name}** — _{s.title}_ (Score: {s.score}/10).\n\n**Why:** {s.recommended_action}\n\n→ Open the dashboard, click **Full Analysis** on this signal, then draft an email."
+            else:
+                resp = "No active signals yet. Go to **Watchlist** → add companies → click **Scan Now** to detect hiring spikes, country launches, and product changes."
+        elif any(w in last_msg for w in ["email", "draft", "outreach", "message"]):
+            resp = "To draft an outreach email:\n1. Dashboard → click **Full Analysis** on any signal\n2. Click **✉ Draft Outreach Email**\n3. Enter your offering → Generate\n\nOr use **Email Templates** (top nav) for any country."
+        elif any(w in last_msg for w in ["pipeline", "deal", "stage", "pipeline"]):
+            resp = f"Your pipeline: **{len(active)} active deals** worth ₹{pipeline_val:,.0f}.\n\nGo to **Deals** page → use Kanban to move deals forward → each signal card has **+ Add to Pipeline** to create a deal in one click."
+        elif any(w in last_msg for w in ["compliance", "gdpr", "law", "legal", "cold email"]):
+            resp = "Go to **Compliance** in the top nav → select a country → see cold email rules, GDPR/PDPA/CASL requirements, penalties, and opt-in rules. Each Lead card also has a ⚖ Compliance quick-link."
+        elif any(w in last_msg for w in ["country", "market", "expand", "germany", "singapore", "uae", "usa", "uk"]):
+            resp = "Go to **Country Intel** → search any country → see timezone, best contact hours, decision speed, buyer persona, and compliance status. You can also filter by risk level."
+        elif any(w in last_msg for w in ["watchlist", "scan", "monitor", "detect"]):
+            resp = "Go to **Watchlist** → add a company domain (e.g. freshworks.com) → click **Scan** to detect hiring spikes, new country pages, and product launches. Click **Scan All** to run all companies at once."
+        else:
+            resp = f"Hi! I'm Signal AI. You have **{len(signals)} active signals** and **{len(active)} deals** in pipeline.\n\nAsk me:\n• _Which signals should I act on today?_\n• _Draft an email for [Company]_\n• _Can I cold email Germany?_\n• _What's my best pipeline deal?_"
+        return {"success": True, "message": resp, "source": "rule-based"}
+
+    # OpenAI path
+    try:
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI(api_key=api_key)
+
+        msgs = [{"role": "system", "content": system_prompt}]
+        for m in req.messages[-12:]:
+            msgs.append({"role": m.role, "content": m.content})
+
+        result = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=msgs,
+            max_tokens=350,
+            temperature=0.45,
+        )
+        return {"success": True, "message": result.choices[0].message.content, "source": "gpt-4o-mini"}
+
+    except Exception:
+        if signals:
+            s = signals[0]
+            return {"success": True, "message": f"AI temporarily unavailable.\n\nYour top signal: **{s.account_name}** — {s.title}. Score: {s.score}/10.\n\nRecommended action: {s.recommended_action}", "source": "fallback"}
+        return {"success": True, "message": "AI temporarily unavailable. Check your OpenAI API key in Railway settings.", "source": "fallback"}
+
+
 class DraftEmailReq(BaseModel):
     sender_name: str = "[Your Name]"
     sender_company: str = "[Your Company]"

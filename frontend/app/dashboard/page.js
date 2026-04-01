@@ -276,9 +276,39 @@ export default function DashboardPage() {
       )}
 
       {/* Page header */}
-      <div style={{ marginBottom:28 }}>
-        <h1 style={{ fontSize:28, fontWeight:900, color:"#fff", marginBottom:4 }}>Signal Intelligence</h1>
-        <p style={{ color:"#737373", fontSize:13 }}>Real-time web changes turned into sales opportunities.</p>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:28, flexWrap:"wrap", gap:12 }}>
+        <div>
+          <h1 style={{ fontSize:28, fontWeight:900, color:"#fff", marginBottom:4 }}>Signal Intelligence</h1>
+          <p style={{ color:"#737373", fontSize:13 }}>Real-time web changes turned into sales opportunities.</p>
+        </div>
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+          {feed.length > 0 && (
+            <button onClick={async () => {
+              const d = await apiFetch("/signals/export/csv-data");
+              if (d.success) {
+                const rows = d.rows;
+                const keys = Object.keys(rows[0] || {});
+                const csv = [keys.join(","), ...rows.map(r => keys.map(k => `"${String(r[k]??'').replace(/"/g,'""')}"`).join(","))].join("\n");
+                const blob = new Blob([csv], { type:"text/csv" });
+                const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "signals.csv"; a.click();
+              }
+            }} style={{
+              padding:"8px 16px", borderRadius:6, fontSize:12, fontWeight:700, cursor:"pointer",
+              background:"rgba(70,211,105,0.1)", border:"1px solid rgba(70,211,105,0.25)", color:"#46d369",
+            }}>
+              ↓ Export CSV
+            </button>
+          )}
+          <button
+            onClick={seed} disabled={seeding}
+            style={{
+              padding:"8px 20px", borderRadius:6, background: seeding ? "rgba(229,9,20,0.5)" : "#E50914",
+              color:"#fff", fontWeight:700, fontSize:12, cursor: seeding ? "not-allowed" : "pointer", border:"none",
+            }}
+          >
+            {seeding ? "Loading…" : feed.length > 0 ? "↺ Refresh" : "▶ Load Demo Signals"}
+          </button>
+        </div>
       </div>
 
       {/* Stats */}

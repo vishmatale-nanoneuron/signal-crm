@@ -3,6 +3,19 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { getUser, logout, apiFetch, getLogoutReason } from "../../lib/api";
 
+// ── CSV download helper ──────────────────────────────────────────────────────
+function downloadCSV(rows, filename) {
+  if (!rows?.length) return;
+  const keys = Object.keys(rows[0]);
+  const csv = [keys.join(","), ...rows.map(r => keys.map(k => `"${String(r[k] ?? "").replace(/"/g, '""')}"`).join(","))].join("\n");
+  const blob = new Blob([csv], { type:"text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 const NAV = [
   { href: "/dashboard",                  label: "Home" },
   { href: "/dashboard/analytics",        label: "Analytics" },
@@ -26,8 +39,17 @@ export default function DashboardLayout({ children }) {
   const [ready,       setReady]       = useState(false);
   const [scrolled,    setScrolled]    = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [toast,       setToast]       = useState(null); // { msg, type }
+  const [toast,       setToast]       = useState(null);
+  const [sigStats,    setSigStats]    = useState({ total:0, high_priority:0 });
+  const [bellOpen,    setBellOpen]    = useState(false);
+  const [bellSignals, setBellSignals] = useState([]);
+  const [chatOpen,    setChatOpen]    = useState(false);
+  const [chatMsgs,    setChatMsgs]    = useState([]);
+  const [chatInput,   setChatInput]   = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
   const dropdownRef = useRef(null);
+  const bellRef     = useRef(null);
+  const chatEndRef  = useRef(null);
   const toastTimer  = useRef(null);
 
   const showToast = useCallback((msg, type = "error") => {
@@ -65,6 +87,14 @@ export default function DashboardLayout({ children }) {
       setUser(d.user);
       setTrial(d.trial);
       setReady(true);
+
+      // Load signal stats for notification bell
+      apiFetch("/signals/feed").then(sd => {
+        if (sd.success) {
+          setSigStats(sd.stats || {});
+          setBellSignals((sd.feed || []).filter(s => !s.is_actioned).slice(0, 5));
+        }
+      });
 
       if (d.trial?.status === "expired" && !FREE_PATHS.includes(path)) {
         router.replace("/dashboard/payment");
@@ -116,10 +146,44 @@ export default function DashboardLayout({ children }) {
 
   // Close dropdown on Escape key
   useEffect(() => {
-    const handler = (e) => { if (e.key === "Escape") setProfileOpen(false); };
+    const handler = (e) => { if (e.key === "Escape") { setProfileOpen(false); setBellOpen(false); setChatOpen(false); } };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, []);
+
+  // Close bell on outside click
+  useEffect(() => {
+    if (!bellOpen) return;
+    const handler = (e) => { if (bellRef.current && !bellRef.current.contains(e.target)) setBellOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [bellOpen]);
+
+  // Scroll chat to bottom on new message
+  useEffect(() => {
+    if (chatEndRef.current) chatEndRef.current.scrollIntoView({ behavior:"smooth" });
+  }, [chatMsgs]);
+
+  async function sendChat(msg) {
+    const text = (msg || chatInput).trim();
+    if (!text) return;
+    const newMsgs = [...chatMsgs, { role:"user", content:text }];
+    setChatMsgs(newMsgs);
+    setChatInput("");
+    setChatLoading(true);
+    try {
+      const r = await apiFetch("/ai/chat", {
+        method:"POST",
+        body: JSON.stringify({ messages: newMsgs.map(m => ({ role:m.role, content:m.content })) }),
+      });
+      if (r.success) {
+        setChatMsgs(prev => [...prev, { role:"assistant", content:r.message }]);
+      }
+    } catch (e) {
+      setChatMsgs(prev => [...prev, { role:"assistant", content:"Sorry, I'm having trouble connecting. Try again." }]);
+    }
+    setChatLoading(false);
+  }
 
   const active = (href) => href === "/dashboard"
     ? path === "/dashboard"
@@ -206,6 +270,86 @@ export default function DashboardLayout({ children }) {
           {trial?.status === "active" && (
             <span style={{ fontSize:12, color:"#46d369", fontWeight:600 }}>✓ Active</span>
           )}
+
+          {/* Notification Bell */}
+          <div ref={bellRef} style={{ position:"relative" }}>
+            <div onClick={() => setBellOpen(o => !o)}
+              style={{ cursor:"pointer", position:"relative", display:"flex", alignItems:"center", justifyContent:"center", width:32, height:32 }}>
+              <span style={{ fontSize:18 }}>🔔</span>
+              {sigStats.high_priority > 0 && (
+                <span style={{
+                  position:"absolute", top:-2, right:-2,
+                  background:"#E50914", color:"#fff", borderRadius:"50%",
+                  width:16, height:16, fontSize:10, fontWeight:800,
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  lineHeight:1,
+                }}>
+                  {sigStats.high_priority > 9 ? "9+" : sigStats.high_priority}
+                </span>
+              )}
+            </div>
+
+            {bellOpen && (
+              <div style={{
+                position:"absolute", top:"calc(100% + 10px)", right:0,
+                background:"rgba(20,20,20,0.98)", border:"1px solid rgba(255,255,255,0.12)",
+                borderRadius:8, width:340, padding:"12px 0",
+                backdropFilter:"blur(12px)", boxShadow:"0 8px 32px rgba(0,0,0,0.8)",
+                zIndex:200, animation:"fadeIn 0.15s ease",
+              }}>
+                <div style={{ padding:"8px 16px 12px", borderBottom:"1px solid rgba(255,255,255,0.07)" }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:"#fff" }}>
+                    🔔 Signals
+                    {sigStats.high_priority > 0 && (
+                      <span style={{ marginLeft:8, background:"rgba(229,9,20,0.15)", color:"#E50914", fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20 }}>
+                        {sigStats.high_priority} high priority
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {bellSignals.length === 0 ? (
+                  <div style={{ padding:"20px 16px", color:"#737373", fontSize:13, textAlign:"center" }}>
+                    No active signals. Add companies to your watchlist.
+                  </div>
+                ) : (
+                  bellSignals.map(s => {
+                    const colors = { high:"#E50914", medium:"#f5a623", low:"#46d369" };
+                    const icons  = { hiring_spike:"📈", new_country_page:"🌍", pricing_change:"💰", new_product:"🚀", leadership_change:"👤", compliance_update:"⚖️" };
+                    return (
+                      <a key={s.id} href={`/dashboard/signals?id=${s.id}`}
+                        onClick={() => setBellOpen(false)}
+                        style={{ display:"block", padding:"10px 16px", textDecoration:"none", borderBottom:"1px solid rgba(255,255,255,0.04)" }}
+                        onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.04)"}
+                        onMouseLeave={e => e.currentTarget.style.background="transparent"}
+                      >
+                        <div style={{ display:"flex", alignItems:"flex-start", gap:10 }}>
+                          <span style={{ fontSize:16, flexShrink:0 }}>{icons[s.signal_type] || "📡"}</span>
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontSize:12, fontWeight:700, color:"#fff", lineHeight:1.4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                              {s.title}
+                            </div>
+                            <div style={{ display:"flex", gap:6, marginTop:3 }}>
+                              <span style={{ fontSize:10, color:colors[s.signal_strength]||"#737373", fontWeight:700 }}>
+                                {(s.signal_strength||"").toUpperCase()}
+                              </span>
+                              <span style={{ fontSize:10, color:"#737373" }}>{s.account_name}</span>
+                            </div>
+                          </div>
+                          <span style={{ fontSize:13, fontWeight:800, color:"#fff", flexShrink:0 }}>{s.score}/10</span>
+                        </div>
+                      </a>
+                    );
+                  })
+                )}
+                <div style={{ padding:"10px 16px 4px" }}>
+                  <a href="/dashboard" onClick={() => setBellOpen(false)}
+                    style={{ fontSize:12, color:"#E50914", fontWeight:600, textDecoration:"none" }}>
+                    View all signals →
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Profile avatar + dropdown */}
           <div ref={dropdownRef} style={{ position:"relative" }}>
@@ -298,6 +442,131 @@ export default function DashboardLayout({ children }) {
           </div>
         </div>
       </nav>
+
+      {/* ── AI Chat Widget ─────────────────────────────────────────────── */}
+      <div style={{ position:"fixed", bottom:24, right:24, zIndex:500 }}>
+
+        {/* Chat panel */}
+        {chatOpen && (
+          <div style={{
+            position:"absolute", bottom:60, right:0,
+            width:360, height:500, background:"rgba(18,18,18,0.98)",
+            border:"1px solid rgba(229,9,20,0.3)", borderRadius:12,
+            display:"flex", flexDirection:"column",
+            boxShadow:"0 16px 48px rgba(0,0,0,0.9)",
+            backdropFilter:"blur(20px)",
+            animation:"slideUp 0.2s ease",
+          }}>
+            {/* Chat header */}
+            <div style={{
+              padding:"14px 16px 12px", borderBottom:"1px solid rgba(255,255,255,0.07)",
+              display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0,
+            }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <div style={{ width:28, height:28, borderRadius:"50%", background:"linear-gradient(135deg,#E50914,#a855f7)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14 }}>🤖</div>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:700, color:"#fff" }}>Signal AI</div>
+                  <div style={{ fontSize:10, color:"#46d369" }}>● Online</div>
+                </div>
+              </div>
+              <button onClick={() => { setChatOpen(false); setChatMsgs([]); }}
+                style={{ background:"transparent", border:"none", color:"#737373", cursor:"pointer", fontSize:16 }}>✕</button>
+            </div>
+
+            {/* Messages */}
+            <div style={{ flex:1, overflowY:"auto", padding:"12px 14px", display:"flex", flexDirection:"column", gap:10 }}>
+              {chatMsgs.length === 0 && (
+                <div>
+                  <div style={{ fontSize:12, color:"#b3b3b3", lineHeight:1.7, marginBottom:12 }}>
+                    Hi! I'm Signal AI. I know your signals and pipeline. Ask me anything:
+                  </div>
+                  {[
+                    "Which signals should I act on today?",
+                    "Draft an email for my top signal",
+                    "Can I cold email Germany?",
+                    "What's my pipeline status?",
+                  ].map(q => (
+                    <button key={q} onClick={() => sendChat(q)} style={{
+                      display:"block", width:"100%", textAlign:"left", marginBottom:6,
+                      padding:"8px 12px", borderRadius:6, fontSize:12, cursor:"pointer",
+                      background:"rgba(229,9,20,0.06)", border:"1px solid rgba(229,9,20,0.15)",
+                      color:"#b3b3b3",
+                    }}>
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {chatMsgs.map((m, i) => (
+                <div key={i} style={{
+                  alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+                  maxWidth:"88%",
+                }}>
+                  <div style={{
+                    padding:"9px 13px", borderRadius: m.role === "user" ? "12px 12px 2px 12px" : "12px 12px 12px 2px",
+                    background: m.role === "user" ? "#E50914" : "rgba(255,255,255,0.07)",
+                    fontSize:12, color:"#fff", lineHeight:1.7,
+                    whiteSpace:"pre-wrap", wordBreak:"break-word",
+                  }}>
+                    {m.content}
+                  </div>
+                </div>
+              ))}
+              {chatLoading && (
+                <div style={{ alignSelf:"flex-start", padding:"9px 13px", borderRadius:"12px 12px 12px 2px", background:"rgba(255,255,255,0.07)" }}>
+                  <div style={{ display:"flex", gap:4 }}>
+                    {[0,1,2].map(i => (
+                      <div key={i} style={{ width:6, height:6, borderRadius:"50%", background:"#737373", animation:`bounce 1.2s ${i*0.2}s infinite` }}/>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div ref={chatEndRef}/>
+            </div>
+
+            {/* Input */}
+            <div style={{ padding:"10px 12px", borderTop:"1px solid rgba(255,255,255,0.07)", display:"flex", gap:8, flexShrink:0 }}>
+              <input
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); }}}
+                placeholder="Ask Signal AI…"
+                style={{
+                  flex:1, padding:"8px 12px", background:"rgba(255,255,255,0.06)",
+                  border:"1px solid rgba(255,255,255,0.1)", borderRadius:20,
+                  color:"#fff", fontSize:12, outline:"none",
+                }}
+              />
+              <button onClick={() => sendChat()} disabled={!chatInput.trim() || chatLoading}
+                style={{
+                  padding:"8px 14px", borderRadius:20, background:"#E50914", color:"#fff",
+                  fontSize:12, fontWeight:700, cursor:"pointer", border:"none",
+                  opacity: (!chatInput.trim() || chatLoading) ? 0.5 : 1,
+                }}>
+                →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Floating button */}
+        <button onClick={() => setChatOpen(o => !o)} style={{
+          width:52, height:52, borderRadius:"50%",
+          background: chatOpen ? "#141414" : "linear-gradient(135deg,#E50914 0%,#a855f7 100%)",
+          border: chatOpen ? "1px solid rgba(255,255,255,0.15)" : "none",
+          color:"#fff", fontSize:22, cursor:"pointer",
+          boxShadow:"0 4px 20px rgba(229,9,20,0.4)",
+          display:"flex", alignItems:"center", justifyContent:"center",
+          transition:"all 0.2s",
+        }}>
+          {chatOpen ? "✕" : "🤖"}
+        </button>
+      </div>
+
+      <style>{`
+        @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-6px)} }
+        @keyframes slideUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+      `}</style>
 
       {/* Main content */}
       <main style={{ padding:"calc(var(--nav-h) + 24px) 56px 48px" }}>
