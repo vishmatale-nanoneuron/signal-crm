@@ -1,201 +1,346 @@
 "use client";
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { API_BASE, saveAuth } from "../../lib/api";
+import { API_BASE, saveAuth, isLoggedIn } from "../../lib/api";
+
+/* ─── Password strength helper ─── */
+function getStrength(pw) {
+  if (!pw) return null;
+  let score = 0;
+  if (pw.length >= 8)         score++;
+  if (pw.length >= 12)        score++;
+  if (/[A-Z]/.test(pw))      score++;
+  if (/[0-9]/.test(pw))      score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  if (score <= 1) return { label: "Weak",   color: "#ef4444", pct: 25 };
+  if (score <= 2) return { label: "Fair",   color: "#f59e0b", pct: 50 };
+  if (score <= 3) return { label: "Good",   color: "#3b82f6", pct: 75 };
+  return           { label: "Strong", color: "#22c55e", pct: 100 };
+}
 
 function LoginContent() {
-  const [mode, setMode]     = useState("login");
-  const [form, setForm]     = useState({ name: "", email: "", password: "", company_name: "" });
-  const [error, setError]   = useState("");
-  const [banner, setBanner] = useState("");
+  const [mode, setMode]       = useState("login");
+  const [form, setForm]       = useState({ name: "", email: "", password: "", company_name: "" });
+  const [showPw, setShowPw]   = useState(false);
+  const [focused, setFocused] = useState("");
+  const [error, setError]     = useState("");
   const [loading, setLoading] = useState(false);
-  const router       = useRouter();
-  const searchParams = useSearchParams();
+  const [banner, setBanner]   = useState("");
+  const router                = useRouter();
+  const searchParams          = useSearchParams();
 
   useEffect(() => {
+    if (isLoggedIn()) { router.replace("/dashboard"); return; }
     const reason = searchParams.get("reason");
     if (reason === "expired")      setBanner("Your session expired. Please sign in again.");
-    if (reason === "unauthorized") setBanner("You were signed out for security. Please sign in again.");
-  }, [searchParams]);
+    if (reason === "unauthorized") setBanner("Signed out for security. Please sign in again.");
+    if (reason === "trial_ended")  setBanner("Your 14-day trial ended. Upgrade to keep access.");
+    if (searchParams.get("mode") === "register") setMode("register");
+  }, [searchParams, router]);
 
-  function set(k, v) { setForm(f => ({ ...f, [k]: v })); }
+  function set(k, v) { setForm(f => ({ ...f, [k]: v })); setError(""); }
+
+  function switchMode(m) {
+    setMode(m);
+    setError("");
+    setForm({ name: "", email: "", password: "", company_name: "" });
+  }
 
   async function submit(e) {
     e.preventDefault();
-    setError(""); setLoading(true);
+    // Validation
+    if (!form.email.trim())                                        { setError("Email is required."); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))           { setError("Enter a valid email address."); return; }
+    if (!form.password)                                            { setError("Password is required."); return; }
+    if (mode === "register" && !form.name.trim())                  { setError("Your full name is required."); return; }
+    if (mode === "register" && form.password.length < 8)           { setError("Password must be at least 8 characters."); return; }
+
+    setLoading(true); setError("");
     try {
       const endpoint = mode === "register" ? "/api/auth/register" : "/api/auth/login";
       const body = mode === "register"
-        ? { name: form.name, email: form.email, password: form.password, company_name: form.company_name }
-        : { email: form.email, password: form.password };
-      const res = await fetch(API_BASE + endpoint, {
+        ? { name: form.name.trim(), email: form.email.trim().toLowerCase(), password: form.password, company_name: form.company_name.trim() }
+        : { email: form.email.trim().toLowerCase(), password: form.password };
+
+      const res  = await fetch(API_BASE + endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       const data = await res.json();
-      if (data.success && data.token) {
-        saveAuth(data.token, data.user);
-        router.push("/dashboard");
-      } else {
+
+      if (!res.ok || !data.success) {
         setError(data.detail || data.message || "Something went wrong. Try again.");
+        setLoading(false);
+        return;
+      }
+
+      saveAuth(data.token, data.user);
+
+      // Redirect based on trial status
+      if (data.trial?.status === "expired") {
+        router.push("/dashboard/payment");
+      } else {
+        router.push("/dashboard");
       }
     } catch {
-      setError("Cannot reach server. Please try again.");
+      setError("Cannot reach server. Check your connection.");
     }
     setLoading(false);
   }
 
+  const strength = (mode === "register" && form.password) ? getStrength(form.password) : null;
+
+  /* ─── Inline styles ─── */
+  const inputStyle = (name) => ({
+    width: "100%",
+    padding: name === "password" ? "11px 44px 11px 14px" : "11px 14px",
+    background: "#111",
+    border: `1.5px solid ${focused === name ? "#6366f1" : "rgba(255,255,255,0.1)"}`,
+    borderRadius: 10,
+    color: "#fff",
+    fontSize: 15,
+    outline: "none",
+    boxSizing: "border-box",
+    transition: "border-color 0.15s",
+    fontFamily: "inherit",
+  });
+
   return (
     <div style={{
       minHeight: "100vh",
-      background: "linear-gradient(rgba(0,0,0,0.55),rgba(0,0,0,0.55)), url('https://assets.nflxext.com/ffe/siteui/vlv3/355a5892-2d75-4c19-8088-b5d7f3e4df89/web/IN-en-20250616-TRIFECTA-perspective_c19d6571-0ffe-4c90-beb9-6f4cb05c7d11_large.jpg') center/cover no-repeat fixed",
-      display: "flex", flexDirection: "column",
+      background: "#0a0a0a",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      fontFamily: "ui-sans-serif, system-ui, -apple-system, sans-serif",
+      padding: "24px 20px",
     }}>
-      {/* Top bar */}
-      <div style={{ padding: "24px 56px" }}>
-        <div style={{ fontSize: 28, fontWeight: 900, color: "#E50914", letterSpacing: "-0.5px", fontStyle: "italic" }}>
-          SIGNAL CRM
-        </div>
-      </div>
 
-      {/* Session expiry banner */}
+      {/* Session banner */}
       {banner && (
         <div style={{
-          position: "fixed", top: 0, left: 0, right: 0, zIndex: 200,
-          background: "rgba(229,9,20,0.92)", color: "#fff",
-          padding: "14px 24px", textAlign: "center",
-          fontSize: 13, fontWeight: 600,
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          position: "fixed", top: 0, left: 0, right: 0, zIndex: 999,
+          background: "rgba(220,38,38,0.92)", backdropFilter: "blur(8px)",
+          color: "#fff", padding: "13px 24px",
+          textAlign: "center", fontSize: 13, fontWeight: 600,
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
         }}>
-          🔒 {banner}
-          <span onClick={() => setBanner("")} style={{ marginLeft: 12, cursor: "pointer", opacity: 0.7 }}>✕</span>
+          <span>⚠</span> {banner}
+          <button onClick={() => setBanner("")} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontSize: 18, lineHeight: 1, marginLeft: 8, padding: 0 }}>×</button>
         </div>
       )}
 
-      {/* Form card */}
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", marginTop: banner ? 48 : 0 }}>
+      {/* Logo */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 36, marginTop: banner ? 60 : 0 }}>
         <div style={{
-          background: "rgba(0,0,0,0.78)",
-          borderRadius: 4,
-          padding: "60px 68px 80px",
-          width: "100%", maxWidth: 450,
-          backdropFilter: "blur(10px)",
-          border: "1px solid rgba(255,255,255,0.05)",
+          width: 36, height: 36,
+          background: "linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%)",
+          borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 18, fontWeight: 800, color: "#fff",
+        }}>S</div>
+        <span style={{ fontSize: 20, fontWeight: 700, color: "#fff", letterSpacing: "-0.3px" }}>Signal CRM</span>
+      </div>
+
+      {/* Card */}
+      <div style={{
+        width: "100%", maxWidth: 420,
+        background: "#141414",
+        border: "1px solid rgba(255,255,255,0.07)",
+        borderRadius: 18,
+        padding: "36px 32px 32px",
+        boxShadow: "0 25px 60px rgba(0,0,0,0.5)",
+      }}>
+
+        {/* Mode tabs */}
+        <div style={{
+          display: "flex", background: "#0a0a0a", borderRadius: 12,
+          padding: 4, marginBottom: 28,
+          border: "1px solid rgba(255,255,255,0.06)",
         }}>
-          <h1 style={{ fontSize: 32, fontWeight: 700, marginBottom: 28, color: "#fff" }}>
-            {mode === "login" ? "Sign In" : "Sign Up"}
-          </h1>
+          {[["login","Sign in"],["register","Create account"]].map(([m, label]) => (
+            <button key={m} onClick={() => switchMode(m)} style={{
+              flex: 1, padding: "9px 12px", borderRadius: 9,
+              border: "none", fontSize: 14, fontWeight: 500,
+              cursor: "pointer", transition: "all 0.15s", fontFamily: "inherit",
+              background: mode === m ? "#1f1f1f" : "transparent",
+              color: mode === m ? "#fff" : "#555",
+              boxShadow: mode === m ? "0 1px 4px rgba(0,0,0,0.5)" : "none",
+            }}>{label}</button>
+          ))}
+        </div>
 
-          <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 16 }} autoComplete="on">
-            {mode === "register" && (
-              <>
-                <input
-                  placeholder="Full name"
-                  value={form.name}
-                  onChange={e => set("name", e.target.value)}
-                  autoComplete="name"
-                  required
-                />
-                <input
-                  placeholder="Company name (optional)"
-                  value={form.company_name}
-                  onChange={e => set("company_name", e.target.value)}
-                  autoComplete="organization"
-                />
-              </>
-            )}
-            <input
-              type="email"
-              placeholder="Email address"
-              value={form.email}
-              onChange={e => set("email", e.target.value)}
-              autoComplete="email"
-              required
-            />
-            <input
-              type="password"
-              placeholder="Password"
-              value={form.password}
-              onChange={e => set("password", e.target.value)}
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
-              required
-              minLength={8}
-            />
+        {/* Heading */}
+        <div style={{ fontSize: 24, fontWeight: 700, color: "#fff", marginBottom: 4, letterSpacing: "-0.3px" }}>
+          {mode === "login" ? "Welcome back" : "Start free today"}
+        </div>
+        <div style={{ fontSize: 14, color: "#666", marginBottom: 24 }}>
+          {mode === "login" ? "Sign in to your Signal CRM account" : "14 days free — no credit card required"}
+        </div>
 
-            {error && (
-              <div style={{
-                background: "rgba(229,9,20,0.12)", border: "1px solid rgba(229,9,20,0.5)",
-                borderRadius: 4, padding: "12px 14px", color: "#e87c03",
-                fontSize: 13, display: "flex", gap: 8, alignItems: "flex-start",
-              }}>
-                <span>⚠</span> {error}
-              </div>
-            )}
+        {/* Trial badge */}
+        {mode === "register" && (
+          <div style={{
+            background: "rgba(99,102,241,0.08)",
+            border: "1px solid rgba(99,102,241,0.18)",
+            borderRadius: 10, padding: "12px 14px", marginBottom: 20,
+            display: "flex", gap: 10, alignItems: "flex-start",
+          }}>
+            <span style={{ fontSize: 15, flexShrink: 0 }}>✦</span>
+            <div style={{ fontSize: 13, color: "#a5b4fc", lineHeight: 1.65 }}>
+              <strong style={{ color: "#c7d2fe" }}>Free 14-day trial</strong> — full access to signals, watchlist, deals, AI actions. Upgrade or cancel after trial.
+            </div>
+          </div>
+        )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                background: "#E50914", color: "#fff", fontSize: 16, fontWeight: 700,
-                padding: "16px", borderRadius: 4, border: "none",
-                cursor: loading ? "not-allowed" : "pointer",
-                opacity: loading ? 0.7 : 1, marginTop: 8,
-                transition: "background 0.15s",
-              }}
-            >
-              {loading ? "Please wait…" : mode === "login" ? "Sign In" : "Start Free Trial →"}
-            </button>
-          </form>
+        {/* Error */}
+        {error && (
+          <div style={{
+            background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.22)",
+            borderRadius: 10, padding: "11px 14px",
+            color: "#f87171", fontSize: 13, marginBottom: 18,
+            display: "flex", gap: 8, alignItems: "flex-start",
+          }}>
+            <span style={{ flexShrink: 0, marginTop: 1 }}>⚠</span> {error}
+          </div>
+        )}
 
-          {mode === "login" && (
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#b3b3b3", fontSize: 13, cursor: "pointer" }}>
-                <input type="checkbox" style={{ width: "auto", padding: 0 }} /> Remember me
-              </label>
-              <span style={{ color: "#b3b3b3", fontSize: 13, cursor: "pointer" }}>Need help?</span>
+        {/* Form */}
+        <form onSubmit={submit} noValidate autoComplete="on">
+
+          {mode === "register" && (
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "#bbb", marginBottom: 6 }}>Full name</label>
+              <input
+                style={inputStyle("name")}
+                placeholder="Vishal Matale"
+                value={form.name}
+                onChange={e => set("name", e.target.value)}
+                onFocus={() => setFocused("name")}
+                onBlur={() => setFocused("")}
+                autoComplete="name"
+              />
             </div>
           )}
 
-          <div style={{ marginTop: 48, color: "#737373", fontSize: 16 }}>
-            {mode === "login" ? (
-              <>New to Signal CRM?{" "}
-                <span onClick={() => { setMode("register"); setError(""); setBanner(""); }}
-                  style={{ color: "#fff", fontWeight: 600, cursor: "pointer" }}>
-                  Sign up now
-                </span>
-              </>
-            ) : (
-              <>Already have an account?{" "}
-                <span onClick={() => { setMode("login"); setError(""); setBanner(""); }}
-                  style={{ color: "#fff", fontWeight: 600, cursor: "pointer" }}>
-                  Sign in
-                </span>
-              </>
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "#bbb", marginBottom: 6 }}>Email address</label>
+            <input
+              type="email"
+              style={inputStyle("email")}
+              placeholder="you@company.com"
+              value={form.email}
+              onChange={e => set("email", e.target.value)}
+              onFocus={() => setFocused("email")}
+              onBlur={() => setFocused("")}
+              autoComplete="email"
+            />
+          </div>
+
+          <div style={{ marginBottom: mode === "register" ? 14 : 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <label style={{ fontSize: 13, fontWeight: 500, color: "#bbb" }}>Password</label>
+              {mode === "login" && (
+                <span style={{ fontSize: 12, color: "#6366f1", cursor: "pointer", fontWeight: 500 }}>Forgot password?</span>
+              )}
+            </div>
+            <div style={{ position: "relative" }}>
+              <input
+                type={showPw ? "text" : "password"}
+                style={inputStyle("password")}
+                placeholder={mode === "register" ? "Min. 8 characters" : "Your password"}
+                value={form.password}
+                onChange={e => set("password", e.target.value)}
+                onFocus={() => setFocused("password")}
+                onBlur={() => setFocused("")}
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPw(p => !p)}
+                style={{
+                  position: "absolute", right: 13, top: "50%", transform: "translateY(-50%)",
+                  background: "none", border: "none", cursor: "pointer",
+                  color: "#555", fontSize: 15, padding: 0, lineHeight: 1,
+                }}
+              >{showPw ? "🙈" : "👁"}</button>
+            </div>
+            {/* Strength bar */}
+            {strength && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ height: 3, background: "rgba(255,255,255,0.06)", borderRadius: 99 }}>
+                  <div style={{ height: "100%", width: `${strength.pct}%`, background: strength.color, borderRadius: 99, transition: "width 0.3s, background 0.3s" }} />
+                </div>
+                <div style={{ fontSize: 11, color: strength.color, marginTop: 4 }}>{strength.label} password</div>
+              </div>
             )}
           </div>
 
           {mode === "register" && (
-            <div style={{ marginTop: 20, padding: "16px", background: "rgba(70,211,105,0.08)", border: "1px solid rgba(70,211,105,0.2)", borderRadius: 4 }}>
-              <div style={{ color: "#46d369", fontWeight: 600, fontSize: 13, marginBottom: 4 }}>14-Day Free Trial</div>
-              <div style={{ color: "#b3b3b3", fontSize: 12 }}>No credit card required. Full access to all features. ₹8,000/mo after trial.</div>
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "#bbb", marginBottom: 6 }}>
+                Company name <span style={{ color: "#444", fontWeight: 400 }}>(optional)</span>
+              </label>
+              <input
+                style={inputStyle("company")}
+                placeholder="Nanoneuron Services"
+                value={form.company_name}
+                onChange={e => set("company_name", e.target.value)}
+                onFocus={() => setFocused("company")}
+                onBlur={() => setFocused("")}
+                autoComplete="organization"
+              />
             </div>
           )}
 
-          <div style={{ marginTop: 20, fontSize: 12, color: "#8c8c8c", lineHeight: 1.8 }}>
-            This page is protected by Signal CRM security. <span style={{ cursor:"pointer", textDecoration:"underline" }}>Learn more.</span>
-          </div>
+          {/* Submit button */}
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: "100%", padding: "13px",
+              background: loading ? "#4547a8" : "#6366f1",
+              color: "#fff", fontSize: 15, fontWeight: 600,
+              border: "none", borderRadius: 10,
+              cursor: loading ? "not-allowed" : "pointer",
+              transition: "background 0.15s",
+              fontFamily: "inherit",
+              letterSpacing: "-0.1px",
+            }}
+          >
+            {loading
+              ? (mode === "login" ? "Signing in…" : "Creating account…")
+              : (mode === "login" ? "Sign in" : "Create free account →")}
+          </button>
+        </form>
+
+        {/* Switch mode */}
+        <div style={{ fontSize: 13, color: "#555", marginTop: 22, textAlign: "center", lineHeight: 1.8 }}>
+          {mode === "login" ? (
+            <>Don't have an account?{" "}
+              <span onClick={() => switchMode("register")} style={{ color: "#6366f1", cursor: "pointer", fontWeight: 500 }}>Sign up free</span>
+            </>
+          ) : (
+            <>Already have an account?{" "}
+              <span onClick={() => switchMode("login")} style={{ color: "#6366f1", cursor: "pointer", fontWeight: 500 }}>Sign in</span>
+            </>
+          )}
+          <br />
+          <span style={{ fontSize: 11, color: "#333" }}>
+            By continuing, you agree to our{" "}
+            <span style={{ color: "#444", cursor: "pointer", textDecoration: "underline" }}>Terms</span>
+            {" "}and{" "}
+            <span style={{ color: "#444", cursor: "pointer", textDecoration: "underline" }}>Privacy Policy</span>
+          </span>
         </div>
       </div>
 
-      {/* Footer */}
-      <div style={{ background: "rgba(0,0,0,0.7)", padding: "24px 56px" }}>
-        <div style={{ fontSize: 13, color: "#737373", marginBottom: 12 }}>Questions? Email support@nanoneuron.ai</div>
-        <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
-          {["FAQ", "Help Center", "Terms of Use", "Privacy", "Contact Us"].map(l => (
-            <span key={l} style={{ fontSize: 12, color: "#737373", cursor: "pointer" }}>{l}</span>
-          ))}
-        </div>
+      {/* Trust bar */}
+      <div style={{ display: "flex", gap: 28, marginTop: 32, flexWrap: "wrap", justifyContent: "center" }}>
+        {["🔒 Bank-grade security", "🌍 195 countries", "⚡ Live in 60 seconds", "🇮🇳 Razorpay + SWIFT"].map(t => (
+          <span key={t} style={{ fontSize: 12, color: "#333" }}>{t}</span>
+        ))}
       </div>
     </div>
   );
@@ -203,7 +348,7 @@ function LoginContent() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div style={{ minHeight:"100vh", background:"#141414" }} />}>
+    <Suspense fallback={<div style={{ minHeight: "100vh", background: "#0a0a0a" }} />}>
       <LoginContent />
     </Suspense>
   );

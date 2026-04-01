@@ -110,10 +110,17 @@ async def _bg_init_db():
 
             # Column migrations — safe to run repeatedly (IF NOT EXISTS)
             migrations = [
+                # Legacy column additions
                 "ALTER TABLE web_signals ADD COLUMN IF NOT EXISTS before_snapshot TEXT DEFAULT ''",
                 "ALTER TABLE web_signals ADD COLUMN IF NOT EXISTS after_snapshot TEXT DEFAULT ''",
                 "ALTER TABLE tracked_pages ADD COLUMN IF NOT EXISTS country_keys TEXT DEFAULT '[]'",
                 "ALTER TABLE tracked_pages ADD COLUMN IF NOT EXISTS product_keys TEXT DEFAULT '[]'",
+                # New user fields
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(50) DEFAULT ''",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(500) DEFAULT ''",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT TRUE",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP NULL",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()",
             ]
             async with engine.connect() as conn:
                 for sql in migrations:
