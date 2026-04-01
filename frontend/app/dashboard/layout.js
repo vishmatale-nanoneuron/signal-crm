@@ -11,6 +11,7 @@ const NAV = [
   { href: "/dashboard/compliance",   label: "Compliance" },
   { href: "/dashboard/deals",        label: "Deals" },
   { href: "/dashboard/next-actions", label: "Next Actions" },
+  { href: "/dashboard/country-intel", label: "Country Intel" },
 ];
 
 const FREE_PATHS = ["/dashboard/payment"];

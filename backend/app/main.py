@@ -18,6 +18,7 @@ from app.deals import deals_router
 from app.next_action import next_action_router
 from app.payment import payment_router
 from app.leads import leads_router
+from app.country_intel import country_intel_router
 
 settings = get_settings()
 
@@ -141,7 +142,7 @@ app.add_middleware(
 for router in [
     auth, watchlist_router, signals_router, buyer_map_router,
     compliance_router, deals_router, next_action_router,
-    payment_router, leads_router,
+    payment_router, leads_router, country_intel_router,
 ]:
     app.include_router(router, prefix="/api")
 
