@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#141414"/>
+      <stop offset="100%" style="stop-color:#1a0505"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Red accent line -->
+  <rect x="0" y="0" width="6" height="630" fill="#E50914"/>
+
+  <!-- Grid lines (subtle) -->
+  <line x1="0" y1="210" x2="1200" y2="210" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+  <line x1="0" y1="420" x2="1200" y2="420" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+  <line x1="400" y1="0" x2="400" y2="630" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+  <line x1="800" y1="0" x2="800" y2="630" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+
+  <!-- Logo -->
+  <text x="80" y="110" font-family="Arial Black,Arial,sans-serif" font-size="52" font-weight="900" font-style="italic" fill="#E50914">SIGNAL CRM</text>
+
+  <!-- Tagline -->
+  <text x="80" y="160" font-family="Arial,sans-serif" font-size="22" fill="#b3b3b3">Cross-Border Sales Intelligence</text>
+
+  <!-- Main headline -->
+  <text x="80" y="260" font-family="Arial Black,Arial,sans-serif" font-size="54" font-weight="900" fill="#ffffff">Turn competitor web changes</text>
+  <text x="80" y="326" font-family="Arial Black,Arial,sans-serif" font-size="54" font-weight="900" fill="#E50914">into closed deals.</text>
+
+  <!-- Sub description -->
+  <text x="80" y="390" font-family="Arial,sans-serif" font-size="22" fill="#737373">Hiring spikes · Market expansions · Pricing shifts · Leadership moves</text>
+
+  <!-- Signal cards -->
+  <rect x="80" y="450" width="220" height="60" rx="6" fill="rgba(229,9,20,0.12)" stroke="rgba(229,9,20,0.3)" stroke-width="1"/>
+  <text x="100" y="476" font-family="Arial,sans-serif" font-size="11" font-weight="700" fill="#E50914">📈 HIRING SPIKE</text>
+  <text x="100" y="496" font-family="Arial,sans-serif" font-size="13" fill="#ffffff">Freshworks · DACH · 9/10</text>
+
+  <rect x="316" y="450" width="220" height="60" rx="6" fill="rgba(0,113,235,0.12)" stroke="rgba(0,113,235,0.3)" stroke-width="1"/>
+  <text x="336" y="476" font-family="Arial,sans-serif" font-size="11" font-weight="700" fill="#0071eb">🌍 EXPANSION</text>
+  <text x="336" y="496" font-family="Arial,sans-serif" font-size="13" fill="#ffffff">Razorpay · Malaysia · 8/10</text>
+
+  <rect x="552" y="450" width="220" height="60" rx="6" fill="rgba(245,166,35,0.12)" stroke="rgba(245,166,35,0.3)" stroke-width="1"/>
+  <text x="572" y="476" font-family="Arial,sans-serif" font-size="11" font-weight="700" fill="#f5a623">💰 PRICING CHANGE</text>
+  <text x="572" y="496" font-family="Arial,sans-serif" font-size="13" fill="#ffffff">Deel · India EOR · 9/10</text>
+
+  <!-- Right side stats -->
+  <text x="900" y="280" font-family="Arial Black,Arial,sans-serif" font-size="64" font-weight="900" fill="#E50914" text-anchor="middle">195+</text>
+  <text x="900" y="310" font-family="Arial,sans-serif" font-size="16" fill="#737373" text-anchor="middle">countries covered</text>
+
+  <text x="900" y="390" font-family="Arial Black,Arial,sans-serif" font-size="64" font-weight="900" fill="#46d369" text-anchor="middle">14-day</text>
+  <text x="900" y="420" font-family="Arial,sans-serif" font-size="16" fill="#737373" text-anchor="middle">free trial · no credit card</text>
+
+  <!-- CTA -->
+  <rect x="820" y="460" width="280" height="50" rx="8" fill="#E50914"/>
+  <text x="960" y="491" font-family="Arial Black,Arial,sans-serif" font-size="18" font-weight="900" fill="#ffffff" text-anchor="middle">Start Free Trial →</text>
+
+  <!-- Domain -->
+  <text x="80" y="590" font-family="Arial,sans-serif" font-size="16" fill="#3a3a3a">signal.nanoneuron.ai</text>
+</svg>

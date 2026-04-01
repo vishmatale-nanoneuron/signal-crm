@@ -1,8 +1,8 @@
 """Signal CRM — Next Best Action Engine"""
 from datetime import datetime
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, update
 from app.database import get_db
 from app.auth import get_current_user
 from app.models import User, WebSignal, Deal, WatchlistAccount
@@ -54,3 +54,35 @@ async def get_actions(user: User = Depends(get_current_user), db: AsyncSession =
 
     actions.sort(key=lambda x: {"urgent":0,"high":1,"medium":2,"low":3}.get(x.get("priority","low"),3))
     return {"success": True, "actions": actions[:15], "total": len(actions)}
+
+
+@next_action_router.post("/{action_id}/complete")
+async def complete_action(action_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Mark an action as done — dismisses the underlying signal or notes deal progress."""
+    if action_id.startswith("signal-"):
+        signal_id = int(action_id.split("-", 1)[1])
+        result = await db.execute(
+            select(WebSignal).where(WebSignal.id == signal_id, WebSignal.user_id == user.id)
+        )
+        signal = result.scalar_one_or_none()
+        if not signal:
+            raise HTTPException(status_code=404, detail="Signal not found")
+        signal.is_actioned = True
+        await db.commit()
+
+    elif action_id.startswith("sig-med-"):
+        signal_id = int(action_id.split("-", 2)[2])
+        result = await db.execute(
+            select(WebSignal).where(WebSignal.id == signal_id, WebSignal.user_id == user.id)
+        )
+        signal = result.scalar_one_or_none()
+        if signal:
+            signal.is_actioned = True
+            await db.commit()
+
+    elif action_id.startswith("deal-stuck-") or action_id.startswith("deal-cmp-"):
+        # For deal-based actions just acknowledge — deal tracking happens in deals module
+        pass
+
+    # setup-watchlist and other static actions are client-side only
+    return {"success": True, "action_id": action_id, "message": "Action marked as complete"}

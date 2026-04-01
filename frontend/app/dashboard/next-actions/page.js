@@ -1,124 +1,225 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { apiFetch } from "../../../lib/api";
 
-const TYPE_META = {
-  contact_now: { icon: "📞", color: "#00D9FF", label: "Contact Now" },
-  move_deal: { icon: "➡️", color: "#A855F7", label: "Move Deal" },
-  compliance_check: { icon: "🛡", color: "#F85149", label: "Compliance Check" },
-  research: { icon: "🔍", color: "#D29922", label: "Research" },
-  wait: { icon: "⏳", color: "#888", label: "Wait" },
+const PRIORITY_META = {
+  urgent: { color:"#E50914", bg:"rgba(229,9,20,0.12)",    label:"URGENT",  icon:"🔥", order:0 },
+  high:   { color:"#f5a623", bg:"rgba(245,166,35,0.12)",  label:"HIGH",    icon:"⚡", order:1 },
+  medium: { color:"#0071eb", bg:"rgba(0,113,235,0.12)",   label:"MEDIUM",  icon:"📌", order:2 },
+  low:    { color:"#737373", bg:"rgba(115,115,115,0.12)", label:"LOW",     icon:"📎", order:3 },
 };
-const PRI_COLOR = { urgent:"#F85149", high:"#E3B341", medium:"#D29922", low:"rgba(230,237,243,0.3)" };
-const PRI_BG = { urgent:"rgba(248,81,73,0.12)", high:"rgba(227,179,65,0.1)", medium:"rgba(210,153,34,0.08)", low:"rgba(255,255,255,0.04)" };
 
-function timeAgo(iso) {
-  const d = Math.floor((Date.now()-new Date(iso))/86400000);
-  return d===0?"Today":d===1?"Yesterday":`${d} days ago`;
+const TYPE_LABEL = {
+  signal_action:    { label:"Signal Follow-up",  icon:"📡" },
+  deal_followup:    { label:"Deal Follow-up",    icon:"💼" },
+  compliance_check: { label:"Compliance Check",  icon:"⚖️"  },
+  watchlist_setup:  { label:"Setup",             icon:"👁"  },
+  default:          { label:"Action",            icon:"✅"  },
+};
+
+function ActionCard({ action, onComplete, completing }) {
+  const priority = PRIORITY_META[action.priority] || PRIORITY_META.medium;
+  const typeInfo = TYPE_LABEL[action.action_type] || TYPE_LABEL.default;
+
+  return (
+    <div style={{
+      background:"#1a1a1a", borderRadius:6, padding:"18px 20px", marginBottom:8,
+      border:"1px solid rgba(255,255,255,0.06)",
+      borderLeft:`3px solid ${priority.color}`,
+      transition:"background 0.15s, opacity 0.3s",
+      opacity: completing ? 0.4 : 1,
+    }}
+      onMouseEnter={e => !completing && (e.currentTarget.style.background="#222")}
+      onMouseLeave={e => !completing && (e.currentTarget.style.background="#1a1a1a")}
+    >
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:16 }}>
+        <div style={{ flex:1 }}>
+          {/* Badges */}
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
+            <span style={{ background:priority.bg, color:priority.color, padding:"2px 10px", borderRadius:20, fontSize:11, fontWeight:700 }}>
+              {priority.icon} {priority.label}
+            </span>
+            <span style={{ background:"rgba(255,255,255,0.05)", color:"#b3b3b3", padding:"2px 10px", borderRadius:20, fontSize:11 }}>
+              {typeInfo.icon} {typeInfo.label}
+            </span>
+          </div>
+
+          {/* Title */}
+          <div style={{ fontSize:15, fontWeight:700, color:"#fff", marginBottom:6, lineHeight:1.4 }}>
+            {action.title || action.action}
+          </div>
+
+          {/* Description */}
+          {action.description && (
+            <div style={{ fontSize:13, color:"#b3b3b3", lineHeight:1.6, marginBottom:8 }}>
+              {action.description}
+            </div>
+          )}
+
+          {/* Company / context */}
+          <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
+            {action.company_name && (
+              <span style={{ color:"#737373", fontSize:12 }}>🏢 {action.company_name}</span>
+            )}
+            {action.country && (
+              <span style={{ color:"#737373", fontSize:12 }}>📍 {action.country}</span>
+            )}
+          </div>
+        </div>
+
+        {/* Complete button */}
+        <button
+          onClick={() => onComplete(action.id)}
+          disabled={completing}
+          style={{
+            padding:"9px 18px", borderRadius:20,
+            background: completing ? "rgba(70,211,105,0.05)" : "rgba(70,211,105,0.1)",
+            border:"1px solid rgba(70,211,105,0.3)", color:"#46d369",
+            fontSize:12, fontWeight:700, cursor: completing ? "not-allowed" : "pointer",
+            flexShrink:0, transition:"all 0.15s",
+            whiteSpace:"nowrap",
+          }}
+          onMouseEnter={e => !completing && (e.currentTarget.style.background="rgba(70,211,105,0.2)")}
+          onMouseLeave={e => !completing && (e.currentTarget.style.background="rgba(70,211,105,0.1)")}
+        >
+          {completing ? "Done ✓" : "✓ Done"}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export default function NextActionsPage() {
-  const [data, setData] = useState(null);
-  const [filter, setFilter] = useState("all");
-  const [loading, setLoading] = useState(true);
-  const [done, setDone] = useState(new Set());
+  const [actions,    setActions]    = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [completing, setCompleting] = useState(null);
+  const [doneCount,  setDoneCount]  = useState(0);
+  const [toast,      setToast]      = useState(null);
 
-  useEffect(() => {
-    apiFetch("/next-actions").then(d => { if(d.success) setData(d); setLoading(false); });
+  const showT = useCallback((msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
   }, []);
 
-  const actions = data?.actions || [];
-  const filtered = actions.filter(a => {
-    if (done.has(a.id)) return false;
-    if (filter === "urgent") return a.priority === "urgent";
-    if (filter === "high") return ["urgent","high"].includes(a.priority);
-    return true;
-  });
+  async function load() {
+    setLoading(true);
+    const d = await apiFetch("/next-actions");
+    if (d.success) setActions(d.actions || d.next_actions || []);
+    setLoading(false);
+  }
 
-  if (loading) return <div style={{color:"var(--text3)",padding:40}}>Loading next actions…</div>;
+  async function complete(id) {
+    setCompleting(id);
+    await apiFetch(`/next-actions/${id}/complete`, { method:"POST" });
+    // Brief pause for feedback
+    await new Promise(r => setTimeout(r, 600));
+    setActions(a => a.filter(x => x.id !== id));
+    setDoneCount(c => c + 1);
+    setCompleting(null);
+    showT("Action completed!");
+  }
+
+  useEffect(() => { load(); }, []);
+
+  // Group by priority
+  const grouped = Object.entries(PRIORITY_META)
+    .sort((a, b) => a[1].order - b[1].order)
+    .map(([key, meta]) => ({
+      key, meta,
+      items: actions.filter(a => (a.priority || "medium") === key),
+    }))
+    .filter(g => g.items.length > 0);
+
+  const urgentCount = actions.filter(a => a.priority === "urgent").length;
 
   return (
     <div>
-      <div style={{marginBottom:24}}>
-        <h1 style={{fontSize:22,fontWeight:800,marginBottom:4}}>🎯 Next Best Actions</h1>
-        <p style={{color:"var(--text2)",fontSize:13}}>AI-ranked actions based on your live signals and pipeline. Act on these first.</p>
-      </div>
-
-      {data && (
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:24}}>
-          <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:10,padding:"14px 18px"}}>
-            <div style={{fontSize:24,fontWeight:800,color:"#F85149"}}>{data.urgent_count}</div>
-            <div style={{fontSize:11,color:"var(--text3)",marginTop:4}}>Urgent Actions</div>
-          </div>
-          <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:10,padding:"14px 18px"}}>
-            <div style={{fontSize:24,fontWeight:800}}>{data.total}</div>
-            <div style={{fontSize:11,color:"var(--text3)",marginTop:4}}>Total Recommended</div>
-          </div>
-          <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:10,padding:"14px 18px"}}>
-            <div style={{fontSize:24,fontWeight:800,color:"#3FB950"}}>{done.size}</div>
-            <div style={{fontSize:11,color:"var(--text3)",marginTop:4}}>Done This Session</div>
-          </div>
+      {toast && (
+        <div style={{
+          position:"fixed", bottom:32, right:32, zIndex:999, background:"#46d369",
+          color:"#fff", padding:"12px 20px", borderRadius:6,
+          fontSize:13, fontWeight:600, boxShadow:"0 4px 20px rgba(0,0,0,0.5)",
+          animation:"slideUp 0.3s ease",
+        }}>
+          <style>{`@keyframes slideUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}`}</style>
+          ✓ {toast}
         </div>
       )}
 
-      {/* Filter tabs */}
-      <div style={{display:"flex",gap:8,marginBottom:20}}>
-        {[["all","All"],["urgent","Urgent Only"],["high","Urgent + High"]].map(([v,l])=>(
-          <button key={v} onClick={()=>setFilter(v)} style={{padding:"6px 16px",borderRadius:20,fontSize:12,fontWeight:filter===v?700:400,background:filter===v?"rgba(0,217,255,0.15)":"rgba(255,255,255,0.04)",color:filter===v?"var(--accent)":"var(--text2)",border:filter===v?"1px solid rgba(0,217,255,0.3)":"1px solid var(--border)",cursor:"pointer"}}>{l}</button>
-        ))}
-        <button onClick={()=>apiFetch("/next-actions").then(d=>{if(d.success)setData(d);})} style={{marginLeft:"auto",padding:"6px 14px",borderRadius:7,background:"rgba(255,255,255,0.05)",border:"1px solid var(--border)",color:"var(--text2)",fontSize:12,cursor:"pointer"}}>↻ Refresh</button>
+      {/* Header */}
+      <div style={{ marginBottom:24 }}>
+        <h1 style={{ fontSize:28, fontWeight:900, color:"#fff", marginBottom:4 }}>Next Actions</h1>
+        <p style={{ color:"#737373", fontSize:13 }}>AI-ranked sales actions based on your signals, deals, and pipeline.</p>
       </div>
 
-      {filtered.length === 0 ? (
-        <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:12,padding:"48px 32px",textAlign:"center"}}>
-          <div style={{fontSize:48,marginBottom:16}}>🎯</div>
-          <div style={{fontWeight:700,marginBottom:8}}>All clear!</div>
-          <div style={{color:"var(--text2)",fontSize:13}}>No pending actions. Add more watchlist accounts and signals to get recommendations.</div>
+      {/* Stats */}
+      <div style={{ display:"flex", gap:10, marginBottom:28, flexWrap:"wrap" }}>
+        <div style={{ background:"#1a1a1a", border:"1px solid rgba(255,255,255,0.06)", borderRadius:6, padding:"14px 22px" }}>
+          <div style={{ fontSize:24, fontWeight:900, color:"#fff" }}>{actions.length}</div>
+          <div style={{ fontSize:11, color:"#737373", marginTop:2 }}>Pending Actions</div>
         </div>
-      ) : (
-        <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          {filtered.map(a=>{
-            const meta = TYPE_META[a.type] || {icon:"📋",color:"#888",label:a.type};
-            const [expanded, setExpanded] = useState(false);
-            return (
-              <div key={a.id} style={{background:PRI_BG[a.priority],border:`1px solid ${PRI_COLOR[a.priority]}30`,borderRadius:12,padding:"18px 22px"}}>
-                <div style={{display:"flex",alignItems:"flex-start",gap:14,marginBottom:10}}>
-                  <div style={{fontSize:24,flexShrink:0}}>{meta.icon}</div>
-                  <div style={{flex:1}}>
-                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,flexWrap:"wrap"}}>
-                      <span style={{background:PRI_COLOR[a.priority]+"25",color:PRI_COLOR[a.priority],padding:"2px 9px",borderRadius:20,fontSize:10,fontWeight:800,letterSpacing:"0.06em"}}>{a.priority.toUpperCase()}</span>
-                      <span style={{background:meta.color+"18",color:meta.color,padding:"2px 8px",borderRadius:20,fontSize:11,fontWeight:600}}>{meta.label}</span>
-                      {a.target_company && <span style={{fontSize:11,color:"var(--text3)"}}>🏢 {a.target_company}</span>}
-                      {a.target_country && <span style={{fontSize:11,color:"var(--text3)"}}>📍 {a.target_country}</span>}
-                      <span style={{fontSize:11,color:"var(--text3)"}}>{timeAgo(a.detected_at)}</span>
-                    </div>
-                    <div style={{fontWeight:700,fontSize:15,lineHeight:1.4,color:"var(--text)",marginBottom:8}}>{a.title}</div>
-                    <div style={{color:"var(--text2)",fontSize:13,lineHeight:1.6}}>{a.detail}</div>
-                  </div>
-                </div>
+        {urgentCount > 0 && (
+          <div style={{ background:"rgba(229,9,20,0.08)", border:"1px solid rgba(229,9,20,0.2)", borderRadius:6, padding:"14px 22px" }}>
+            <div style={{ fontSize:24, fontWeight:900, color:"#E50914" }}>{urgentCount}</div>
+            <div style={{ fontSize:11, color:"#737373", marginTop:2 }}>Urgent Today</div>
+          </div>
+        )}
+        {doneCount > 0 && (
+          <div style={{ background:"rgba(70,211,105,0.06)", border:"1px solid rgba(70,211,105,0.2)", borderRadius:6, padding:"14px 22px" }}>
+            <div style={{ fontSize:24, fontWeight:900, color:"#46d369" }}>{doneCount}</div>
+            <div style={{ fontSize:11, color:"#737373", marginTop:2 }}>Completed Today</div>
+          </div>
+        )}
+      </div>
 
-                {/* Proof */}
-                <div style={{background:"rgba(0,0,0,0.25)",border:"1px solid rgba(255,255,255,0.05)",borderRadius:8,padding:"10px 14px",marginBottom:12,cursor:"pointer"}} onClick={()=>setExpanded(!expanded)}>
-                  <div style={{fontSize:10,fontWeight:700,color:"var(--text3)",letterSpacing:"0.08em",marginBottom:4}}>PROOF {expanded?"▲":"▼"}</div>
-                  <div style={{fontSize:12,color:"rgba(230,237,243,0.55)"}}>{a.proof}</div>
-                  {expanded && a.proof_detail && <div style={{marginTop:8,fontSize:12,color:"rgba(230,237,243,0.4)",lineHeight:1.5}}>{a.proof_detail}</div>}
-                </div>
+      {loading && (
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"center", padding:80, gap:12, color:"#737373" }}>
+          <div style={{ width:24, height:24, border:"2px solid #E50914", borderTopColor:"transparent", borderRadius:"50%", animation:"spin 0.7s linear infinite" }}/>
+          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+          Generating actions…
+        </div>
+      )}
 
-                <div style={{display:"flex",gap:8}}>
-                  <button onClick={()=>setDone(d=>new Set([...d,a.id]))} style={{padding:"7px 16px",borderRadius:7,background:"linear-gradient(135deg,#00D9FF,#A855F7)",color:"#06080D",fontWeight:700,fontSize:12,cursor:"pointer",border:"none"}}>✓ Done</button>
-                  <button onClick={()=>setDone(d=>new Set([...d,a.id]))} style={{padding:"7px 14px",borderRadius:7,background:"rgba(255,255,255,0.05)",border:"1px solid var(--border)",color:"var(--text3)",fontSize:12,cursor:"pointer"}}>Snooze</button>
-                  {a.type==="compliance_check"&&a.target_country&&(
-                    <a href={`/dashboard/compliance`} style={{padding:"7px 14px",borderRadius:7,background:"rgba(248,81,73,0.1)",border:"1px solid rgba(248,81,73,0.25)",color:"#F85149",fontSize:12,cursor:"pointer",display:"inline-block"}}>Open Compliance →</a>
-                  )}
-                  {a.type==="move_deal"&&(
-                    <a href="/dashboard/deals" style={{padding:"7px 14px",borderRadius:7,background:"rgba(168,85,247,0.1)",border:"1px solid rgba(168,85,247,0.25)",color:"var(--accent2)",fontSize:12,cursor:"pointer",display:"inline-block"}}>Open Deals →</a>
-                  )}
-                </div>
+      {!loading && actions.length === 0 && (
+        <div style={{ background:"#1a1a1a", borderRadius:8, padding:"72px 32px", textAlign:"center", border:"1px solid rgba(255,255,255,0.06)" }}>
+          {doneCount > 0 ? (
+            <>
+              <div style={{ fontSize:56, marginBottom:16 }}>🎉</div>
+              <div style={{ fontSize:20, fontWeight:800, color:"#fff", marginBottom:8 }}>All done for today!</div>
+              <div style={{ color:"#737373", fontSize:14 }}>You completed {doneCount} action{doneCount > 1 ? "s" : ""}. Check back when new signals arrive.</div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize:56, marginBottom:16 }}>📋</div>
+              <div style={{ fontSize:20, fontWeight:800, color:"#fff", marginBottom:8 }}>No actions pending</div>
+              <div style={{ color:"#737373", fontSize:14, maxWidth:360, margin:"0 auto" }}>
+                Actions are generated from your signals and deal pipeline. Add companies to your watchlist or load signals to get started.
               </div>
-            );
-          })}
+            </>
+          )}
         </div>
       )}
+
+      {/* Priority-grouped actions */}
+      {grouped.map(({ key, meta, items }) => (
+        <div key={key} style={{ marginBottom:32 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
+            <span style={{ fontSize:18 }}>{meta.icon}</span>
+            <span style={{ fontSize:16, fontWeight:700, color:meta.color }}>{meta.label}</span>
+            <span style={{ fontSize:12, background:meta.bg, color:meta.color, padding:"2px 8px", borderRadius:10, fontWeight:700 }}>
+              {items.length}
+            </span>
+          </div>
+          {items.map(action => (
+            <ActionCard
+              key={action.id}
+              action={action}
+              onComplete={complete}
+              completing={completing === action.id}
+            />
+          ))}
+        </div>
+      ))}
     </div>
   );
 }

@@ -1,5 +1,39 @@
 /*
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
+  X-XSS-Protection: 1; mode=block
   Referrer-Policy: strict-origin-when-cross-origin
-  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https: blob:; connect-src 'self' https://signal-crm-api-production.up.railway.app https://api.razorpay.com; frame-src https://api.razorpay.com; object-src 'none'; base-uri 'self'; form-action 'self';
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Resource-Policy: same-origin
+
+# OG image — allow cross-origin for social crawlers
+/og-image.svg
+  Content-Type: image/svg+xml
+  Cross-Origin-Resource-Policy: cross-origin
+  Cache-Control: public, max-age=86400
+
+/og-image.png
+  Cross-Origin-Resource-Policy: cross-origin
+  Cache-Control: public, max-age=86400
+
+# Sitemap + robots — always fresh
+/sitemap.xml
+  Cache-Control: public, max-age=3600
+  Content-Type: application/xml
+
+/robots.txt
+  Cache-Control: public, max-age=3600
+
+# Static assets — long cache
+/*.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.css
+  Cache-Control: public, max-age=31536000, immutable
+
+/icon.svg
+  Cache-Control: public, max-age=86400
+  Content-Type: image/svg+xml
