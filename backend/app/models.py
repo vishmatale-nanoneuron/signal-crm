@@ -30,7 +30,7 @@ def _uuid() -> str:
 # Users — core identity table
 # ─────────────────────────────────────────────────────────────────────────────
 class User(Base):
-    __tablename__ = "users"
+    __tablename__ = "sig_users"
 
     id:            Mapped[str]           = mapped_column(String(36),  primary_key=True, default=_uuid)
     email:         Mapped[str]           = mapped_column(String(255), unique=True, index=True, nullable=False)
@@ -55,14 +55,14 @@ class User(Base):
 # Subscriptions — one active per user (like Stripe's subscription object)
 # ─────────────────────────────────────────────────────────────────────────────
 class Subscription(Base):
-    __tablename__ = "subscriptions"
+    __tablename__ = "sig_subscriptions"
     __table_args__ = (
         Index("ix_sub_user_id", "user_id"),
         Index("ix_sub_status",  "status"),
     )
 
     id:                   Mapped[str]           = mapped_column(String(36), primary_key=True, default=_uuid)
-    user_id:              Mapped[str]           = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id:              Mapped[str]           = mapped_column(String(36), ForeignKey("sig_users.id", ondelete="CASCADE"), nullable=False)
     plan:                 Mapped[str]           = mapped_column(String(50), default="trial")    # trial|starter|pro|enterprise
     status:               Mapped[str]           = mapped_column(String(30), default="active")   # active|canceled|expired|past_due
     billing_cycle:        Mapped[str]           = mapped_column(String(20), default="monthly")  # monthly|annual
@@ -80,7 +80,7 @@ class Subscription(Base):
 # Payment Transactions — immutable audit trail, never modified after insert
 # ─────────────────────────────────────────────────────────────────────────────
 class PaymentTransaction(Base):
-    __tablename__ = "payment_transactions"
+    __tablename__ = "sig_payment_transactions"
     __table_args__ = (
         Index("ix_txn_user_id",    "user_id"),
         Index("ix_txn_created_at", "created_at"),
@@ -88,8 +88,8 @@ class PaymentTransaction(Base):
     )
 
     id:                  Mapped[str]           = mapped_column(String(36),  primary_key=True, default=_uuid)
-    user_id:             Mapped[str]           = mapped_column(String(36),  ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    subscription_id:     Mapped[str|None]      = mapped_column(String(36),  ForeignKey("subscriptions.id", ondelete="SET NULL"), nullable=True)
+    user_id:             Mapped[str]           = mapped_column(String(36),  ForeignKey("sig_users.id", ondelete="CASCADE"), nullable=False)
+    subscription_id:     Mapped[str|None]      = mapped_column(String(36),  ForeignKey("sig_subscriptions.id", ondelete="SET NULL"), nullable=True)
     plan:                Mapped[str]           = mapped_column(String(50),  default="")
     amount:              Mapped[float]         = mapped_column(Float,       default=0.0)
     currency:            Mapped[str]           = mapped_column(String(10),  default="INR")
@@ -108,14 +108,14 @@ class PaymentTransaction(Base):
 # Watchlist Accounts — companies being monitored
 # ─────────────────────────────────────────────────────────────────────────────
 class WatchlistAccount(Base):
-    __tablename__ = "watchlist_accounts"
+    __tablename__ = "sig_watchlist_accounts"
     __table_args__ = (
         Index("ix_watchlist_user_id", "user_id"),
         Index("ix_watchlist_domain",  "domain"),
     )
 
     id:               Mapped[str]           = mapped_column(String(36),  primary_key=True, default=_uuid)
-    user_id:          Mapped[str]           = mapped_column(String(36),  ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id:          Mapped[str]           = mapped_column(String(36),  ForeignKey("sig_users.id", ondelete="CASCADE"), nullable=False)
     company_name:     Mapped[str]           = mapped_column(String(255), nullable=False)
     domain:           Mapped[str]           = mapped_column(String(255), default="")
     industry:         Mapped[str]           = mapped_column(String(100), default="")
@@ -137,7 +137,7 @@ class WatchlistAccount(Base):
 # Web Signals — detected competitive intelligence events
 # ─────────────────────────────────────────────────────────────────────────────
 class WebSignal(Base):
-    __tablename__ = "web_signals"
+    __tablename__ = "sig_web_signals"
     __table_args__ = (
         Index("ix_signals_user_id",        "user_id"),
         Index("ix_signals_detected_at",    "detected_at"),
@@ -146,8 +146,8 @@ class WebSignal(Base):
     )
 
     id:                 Mapped[str]      = mapped_column(String(36),  primary_key=True, default=_uuid)
-    user_id:            Mapped[str]      = mapped_column(String(36),  ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    account_id:         Mapped[str|None] = mapped_column(String(36),  ForeignKey("watchlist_accounts.id", ondelete="SET NULL"), nullable=True)
+    user_id:            Mapped[str]      = mapped_column(String(36),  ForeignKey("sig_users.id", ondelete="CASCADE"), nullable=False)
+    account_id:         Mapped[str|None] = mapped_column(String(36),  ForeignKey("sig_watchlist_accounts.id", ondelete="SET NULL"), nullable=True)
     account_name:       Mapped[str]      = mapped_column(String(255), default="")
     signal_type:        Mapped[str]      = mapped_column(String(50),  default="")
     signal_strength:    Mapped[str]      = mapped_column(String(20),  default="medium")
@@ -169,14 +169,14 @@ class WebSignal(Base):
 # Deals — CRM pipeline
 # ─────────────────────────────────────────────────────────────────────────────
 class Deal(Base):
-    __tablename__ = "deals"
+    __tablename__ = "sig_deals"
     __table_args__ = (
         Index("ix_deals_user_id", "user_id"),
         Index("ix_deals_stage",   "user_id", "stage"),   # composite for pipeline queries
     )
 
     id:                 Mapped[str]      = mapped_column(String(36),  primary_key=True, default=_uuid)
-    user_id:            Mapped[str]      = mapped_column(String(36),  ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id:            Mapped[str]      = mapped_column(String(36),  ForeignKey("sig_users.id", ondelete="CASCADE"), nullable=False)
     title:              Mapped[str]      = mapped_column(String(255), nullable=False)
     company_name:       Mapped[str]      = mapped_column(String(255), default="")
     contact_name:       Mapped[str]      = mapped_column(String(255), default="")
@@ -200,14 +200,14 @@ class Deal(Base):
 # Leads — prospect database
 # ─────────────────────────────────────────────────────────────────────────────
 class Lead(Base):
-    __tablename__ = "leads"
+    __tablename__ = "sig_leads"
     __table_args__ = (
         Index("ix_leads_user_id", "user_id"),
         Index("ix_leads_status",  "user_id", "status"),
     )
 
     id:           Mapped[str]      = mapped_column(String(36),  primary_key=True, default=_uuid)
-    user_id:      Mapped[str]      = mapped_column(String(36),  ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id:      Mapped[str]      = mapped_column(String(36),  ForeignKey("sig_users.id", ondelete="CASCADE"), nullable=False)
     company:      Mapped[str]      = mapped_column(String(255), default="")
     contact_name: Mapped[str]      = mapped_column(String(255), default="")
     title:        Mapped[str]      = mapped_column(String(255), default="")
@@ -226,14 +226,14 @@ class Lead(Base):
 # Tracked Pages — web pages we scrape for watchlist companies
 # ─────────────────────────────────────────────────────────────────────────────
 class TrackedPage(Base):
-    __tablename__ = "tracked_pages"
+    __tablename__ = "sig_tracked_pages"
     __table_args__ = (
         Index("ix_tracked_pages_account_id", "account_id"),
         Index("ix_tracked_pages_type",       "account_id", "page_type"),
     )
 
     id:              Mapped[str]           = mapped_column(String(36),  primary_key=True, default=_uuid)
-    account_id:      Mapped[str]           = mapped_column(String(36),  ForeignKey("watchlist_accounts.id", ondelete="CASCADE"), nullable=False)
+    account_id:      Mapped[str]           = mapped_column(String(36),  ForeignKey("sig_watchlist_accounts.id", ondelete="CASCADE"), nullable=False)
     page_type:       Mapped[str]           = mapped_column(String(50),  default="")    # careers|sitemap|products
     url:             Mapped[str]           = mapped_column(String(500), default="")
     content_hash:    Mapped[str]           = mapped_column(String(64),  default="")   # MD5 of last content
@@ -249,14 +249,14 @@ class TrackedPage(Base):
 # Page Snapshots — before/after evidence for detected signals
 # ─────────────────────────────────────────────────────────────────────────────
 class PageSnapshot(Base):
-    __tablename__ = "page_snapshots"
+    __tablename__ = "sig_page_snapshots"
     __table_args__ = (
         Index("ix_snapshots_signal_id", "signal_id"),
     )
 
     id:              Mapped[str]           = mapped_column(String(36), primary_key=True, default=_uuid)
-    signal_id:       Mapped[str]           = mapped_column(String(36), ForeignKey("web_signals.id", ondelete="CASCADE"), nullable=False)
-    tracked_page_id: Mapped[str|None]      = mapped_column(String(36), ForeignKey("tracked_pages.id", ondelete="SET NULL"), nullable=True)
+    signal_id:       Mapped[str]           = mapped_column(String(36), ForeignKey("sig_web_signals.id", ondelete="CASCADE"), nullable=False)
+    tracked_page_id: Mapped[str|None]      = mapped_column(String(36), ForeignKey("sig_tracked_pages.id", ondelete="SET NULL"), nullable=True)
     before_content:  Mapped[str]           = mapped_column(Text,       default="")
     after_content:   Mapped[str]           = mapped_column(Text,       default="")
     change_type:     Mapped[str]           = mapped_column(String(50), default="")
@@ -268,13 +268,13 @@ class PageSnapshot(Base):
 # Compliance Saves — saved compliance results per user
 # ─────────────────────────────────────────────────────────────────────────────
 class ComplianceSave(Base):
-    __tablename__ = "compliance_saves"
+    __tablename__ = "sig_compliance_saves"
     __table_args__ = (
         Index("ix_compliance_user_id", "user_id"),
     )
 
     id:         Mapped[str]      = mapped_column(String(36),  primary_key=True, default=_uuid)
-    user_id:    Mapped[str]      = mapped_column(String(36),  ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id:    Mapped[str]      = mapped_column(String(36),  ForeignKey("sig_users.id", ondelete="CASCADE"), nullable=False)
     country:    Mapped[str]      = mapped_column(String(100), default="")
     framework:  Mapped[str]      = mapped_column(String(100), default="")
     notes:      Mapped[str]      = mapped_column(Text,        default="")
