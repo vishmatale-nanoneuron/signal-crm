@@ -32,24 +32,59 @@ def _normalise_url(url: str) -> str:
 
 _raw_url = os.environ.get("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/signal_crm")
 
-# ─── SSL: public rlwy.net proxy needs SSL; internal railway.internal doesn't ─
+
+# ─── SSL config ───────────────────────────────────────────────────────────────
+# Supabase (supabase.co) and Railway public proxy require SSL
+# Railway internal (.railway.internal) does NOT need SSL
 def _build_ssl(raw_url: str):
-    if "rlwy.net" in raw_url or ("railway.app" in raw_url and "railway.internal" not in raw_url):
+    needs_ssl = (
+        "supabase.co" in raw_url
+        or "supabase.com" in raw_url
+        or "rlwy.net" in raw_url
+        or ("railway.app" in raw_url and "railway.internal" not in raw_url)
+    )
+    if needs_ssl:
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
         return ctx
     return False
 
+
+# ─── pgbouncer detection ──────────────────────────────────────────────────────
+# Supabase Transaction Mode pooler uses port 6543 (pgbouncer).
+# pgbouncer requires statement_cache_size=0 in asyncpg to disable prepared stmts.
+_uses_pgbouncer = ":6543/" in _raw_url
+
 _ssl_ctx = _build_ssl(_raw_url)
 _db_url  = _normalise_url(_raw_url)
+
+# ─── asyncpg connect args ────────────────────────────────────────────────────
+_connect_args: dict = {
+    "ssl":             _ssl_ctx,
+    "command_timeout": 30,
+    "server_settings": {
+        "application_name":                    "signal_crm_api",
+        "statement_timeout":                   "25000",  # 25 s max query
+        "idle_in_transaction_session_timeout": "30000",  # 30 s idle txn
+    },
+}
+
+# pgbouncer (Supabase Transaction Mode) — disable prepared statements
+if _uses_pgbouncer:
+    _connect_args["statement_cache_size"] = 0
+    logger.info("DB: pgbouncer mode — prepared statements disabled")
+
 
 # ─── Engine — production pool settings ───────────────────────────────────────
 # pool_size=5       → 5 persistent connections per Gunicorn worker
 # max_overflow=10   → 10 extra burst connections (auto-closed when idle)
-# pool_recycle=600  → recycle connections every 10 min (avoids PG idle timeout)
+# pool_recycle=600  → recycle connections every 10 min (avoids Supabase idle timeout)
 # pool_timeout=30   → wait up to 30 s for a free connection
 # pool_pre_ping     → test connection before use (catches stale/dropped conns)
+#
+# NOTE: For Supabase, use the Direct Connection URL (port 5432) for Gunicorn workers.
+# The Transaction Mode pooler (port 6543) is for serverless/short-lived connections.
 engine: AsyncEngine = create_async_engine(
     _db_url,
     echo=False,
@@ -58,15 +93,7 @@ engine: AsyncEngine = create_async_engine(
     max_overflow=10,
     pool_recycle=600,
     pool_timeout=30,
-    connect_args={
-        "ssl": _ssl_ctx,
-        "command_timeout": 30,
-        "server_settings": {
-            "application_name":                      "signal_crm_api",
-            "statement_timeout":                     "25000",  # 25 s max query
-            "idle_in_transaction_session_timeout":   "30000",  # 30 s idle txn
-        },
-    },
+    connect_args=_connect_args,
 )
 
 # ─── Session factory ─────────────────────────────────────────────────────────

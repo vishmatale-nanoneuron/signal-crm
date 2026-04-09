@@ -59,6 +59,10 @@ export function saveAuth(token, user) {
     localStorage.setItem("sig_token", token);
     localStorage.setItem("sig_user", JSON.stringify(user));
     localStorage.removeItem("sig_logout_reason");
+    // Set sig_auth cookie so Next.js middleware can detect login state server-side
+    // SameSite=Lax prevents CSRF; Secure ensures HTTPS-only in production
+    const secure = location.protocol === "https:" ? "; Secure" : "";
+    document.cookie = `sig_auth=1; Path=/; SameSite=Lax; Max-Age=86400${secure}`;
   } catch (_) {}
 }
 
@@ -67,6 +71,8 @@ export function logout() {
   try {
     localStorage.removeItem("sig_token");
     localStorage.removeItem("sig_user");
+    // Clear auth cookie so middleware stops treating user as logged in
+    document.cookie = "sig_auth=; Path=/; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT";
   } catch (_) {}
 }
 
