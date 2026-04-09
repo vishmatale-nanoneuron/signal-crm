@@ -390,6 +390,101 @@ async def detect_new_product(
 
 
 # ---------------------------------------------------------------------------
+# D. Pricing Change Detection
+# ---------------------------------------------------------------------------
+
+PRICING_PATHS = ["/pricing", "/plans", "/price", "/packages", "/subscription",
+                 "/pricing/", "/plans/"]
+
+_PRICE_PATTERNS = [
+    re.compile(r"\$\s*(\d[\d,\.]*)", re.IGNORECASE),
+    re.compile(r"€\s*(\d[\d,\.]*)", re.IGNORECASE),
+    re.compile(r"£\s*(\d[\d,\.]*)", re.IGNORECASE),
+    re.compile(r"₹\s*(\d[\d,\.]*)", re.IGNORECASE),
+    re.compile(r"(\d[\d,\.]*)\s*/\s*mo", re.IGNORECASE),
+    re.compile(r"(\d[\d,\.]*)\s*/\s*month", re.IGNORECASE),
+    re.compile(r"(\d[\d,\.]*)\s*/\s*year", re.IGNORECASE),
+    re.compile(r"(\d[\d,\.]*)\s*/\s*yr", re.IGNORECASE),
+]
+
+_PLAN_KEYWORDS = ["starter", "basic", "pro", "professional", "business",
+                  "enterprise", "team", "growth", "scale", "free", "premium"]
+
+
+def _extract_pricing(html: str) -> dict:
+    """Extract pricing signals from a pricing page."""
+    soup = BeautifulSoup(html, "html.parser")
+    text = _clean(soup.get_text(" "))
+
+    prices = []
+    for pat in _PRICE_PATTERNS:
+        prices += pat.findall(text)
+
+    plans = [kw for kw in _PLAN_KEYWORDS if kw.lower() in text.lower()]
+
+    return {
+        "prices":   list(dict.fromkeys(prices))[:15],
+        "plans":    list(dict.fromkeys(plans))[:8],
+        "excerpt":  text[:600],
+    }
+
+
+async def detect_pricing_change(
+    domain: str, client: httpx.AsyncClient,
+    prev_hash: str = ""
+) -> Optional[dict]:
+    """Detect pricing page changes (new prices, plan restructures)."""
+    base = f"https://{domain.lstrip('https://').lstrip('http://').rstrip('/')}"
+
+    html = None
+    found_url = None
+    for path in PRICING_PATHS:
+        html = await _fetch(client, base + path)
+        if html:
+            found_url = base + path
+            break
+
+    if not html:
+        return None
+
+    data         = _extract_pricing(html)
+    content_hash = _md5(data["excerpt"])
+
+    if not prev_hash or content_hash == prev_hash:
+        return None   # No pricing page before, or no change
+
+    before = f"Previous pricing snapshot (hash: {prev_hash[:8]})"
+    after  = (
+        f"Prices detected: {', '.join(data['prices'][:6]) or 'changed'} | "
+        f"Plans: {', '.join(data['plans'][:4]) or 'unknown'}"
+    )
+
+    return {
+        "signal_type":        "pricing_change",
+        "signal_strength":    "high",
+        "title":              f"{domain.split('.')[0].capitalize()} updated pricing page",
+        "summary":            (
+            f"Pricing page changed at {found_url}. "
+            f"Plans detected: {', '.join(data['plans'][:4]) or 'unknown'}. "
+            "Price changes create immediate competitive opportunities — their customers are evaluating alternatives."
+        ),
+        "proof_text":         f"Pricing page: {found_url} | Prices found: {', '.join(data['prices'][:5]) or 'changed'}",
+        "proof_url":          found_url,
+        "country_hint":       "",
+        "recommended_action": (
+            "Their pricing just changed. Contact their customer base with a competitive comparison. "
+            "Price-sensitive buyers are evaluating right now."
+        ),
+        "score":              8,
+        "before_snapshot":    before,
+        "after_snapshot":     after,
+        "content_hash":       content_hash,
+        "page_url":           found_url,
+        "page_type":          "pricing",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Full company scan
 # ---------------------------------------------------------------------------
 
@@ -398,6 +493,7 @@ async def scan_company(
     watch_hiring: bool = True,
     watch_expansion: bool = True,
     watch_products: bool = True,
+    watch_pricing: bool = True,
     prev_data: dict | None = None,
 ) -> list[dict]:
     """Run all detectors on a company domain. Returns list of detected signals."""
@@ -423,6 +519,11 @@ async def scan_company(
             tasks.append(detect_new_product(
                 domain, client,
                 prev.get("products_json", "[]"),
+            ))
+        if watch_pricing:
+            tasks.append(detect_pricing_change(
+                domain, client,
+                prev.get("pricing_hash", ""),
             ))
 
         results = await asyncio.gather(*tasks, return_exceptions=True)

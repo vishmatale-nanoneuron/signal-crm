@@ -35,7 +35,7 @@ export default function LeadsPage() {
   const [leads,    setLeads]    = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form,     setForm]     = useState({ name:"", email:"", company:"", country:"", title:"", industry:"", source:"manual" });
+  const [form,     setForm]     = useState({ contact_name:"", email:"", company:"", country:"", title:"", industry:"", source:"manual" });
   const [saving,   setSaving]   = useState(false);
   const [search,   setSearch]   = useState("");
   const [statusF,  setStatusF]  = useState("all");
@@ -58,15 +58,15 @@ export default function LeadsPage() {
     const r = await apiFetch("/leads", { method:"POST", body: JSON.stringify(form) });
     if (r.success) {
       setShowForm(false);
-      setForm({ name:"", email:"", company:"", country:"", title:"", industry:"", source:"manual" });
+      setForm({ contact_name:"", email:"", company:"", country:"", title:"", industry:"", source:"manual" });
       await load();
-      showT(`${form.name} added to leads`);
+      showT(`${form.contact_name || form.company} added to leads`);
     }
     setSaving(false);
   }
 
   async function updateStatus(id, status) {
-    await apiFetch(`/leads/${id}`, { method:"PATCH", body: JSON.stringify({ status }) });
+    await apiFetch(`/leads/${id}`, { method:"PUT", body: JSON.stringify({ status }) });
     setLeads(l => l.map(x => x.id === id ? { ...x, status } : x));
     if (status === "converted") showT("🎉 Lead converted!");
   }
@@ -75,7 +75,7 @@ export default function LeadsPage() {
 
   const filtered = leads.filter(l => {
     const matchSearch = !search ||
-      l.name?.toLowerCase().includes(search.toLowerCase()) ||
+      l.contact_name?.toLowerCase().includes(search.toLowerCase()) ||
       l.company?.toLowerCase().includes(search.toLowerCase()) ||
       l.country?.toLowerCase().includes(search.toLowerCase()) ||
       l.industry?.toLowerCase().includes(search.toLowerCase());
@@ -134,9 +134,9 @@ export default function LeadsPage() {
           <div style={{ fontSize:15, fontWeight:700, color:"#fff", marginBottom:18 }}>New Lead</div>
           <form onSubmit={save} style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
             {[
-              ["FULL NAME *","name","Full name",true],
+              ["FULL NAME *","contact_name","Full name",true],
               ["EMAIL","email","Work email",false],
-              ["COMPANY","company","Company name",false],
+              ["COMPANY *","company","Company name",true],
               ["COUNTRY","country","e.g. Germany",false],
               ["JOB TITLE","title","VP Sales",false],
               ["INDUSTRY","industry","SaaS / Fintech…",false],
@@ -205,7 +205,7 @@ export default function LeadsPage() {
       {/* Lead list */}
       {filtered.map(lead => {
         const status = STATUS_META[lead.status || "new"];
-        const avatarColor = AVATAR_COLORS[(lead.name?.charCodeAt(0) || 0) % AVATAR_COLORS.length];
+        const avatarColor = AVATAR_COLORS[((lead.contact_name || lead.company)?.charCodeAt(0) || 0) % AVATAR_COLORS.length];
         const score = lead.lead_score || lead.score || 0;
         return (
           <div key={lead.id} style={{
@@ -224,11 +224,11 @@ export default function LeadsPage() {
                   display:"flex", alignItems:"center", justifyContent:"center",
                   fontWeight:800, fontSize:16, color:"#fff", flexShrink:0,
                 }}>
-                  {lead.name?.[0]?.toUpperCase() || "?"}
+                  {(lead.contact_name || lead.company)?.[0]?.toUpperCase() || "?"}
                 </div>
 
                 <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontSize:14, fontWeight:700, color:"#fff", marginBottom:2 }}>{lead.name}</div>
+                  <div style={{ fontSize:14, fontWeight:700, color:"#fff", marginBottom:2 }}>{lead.contact_name || lead.company}</div>
                   <div style={{ fontSize:12, color:"#b3b3b3", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                     {[lead.title, lead.company].filter(Boolean).join(" · ")}
                   </div>

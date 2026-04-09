@@ -46,6 +46,17 @@ const nextConfig = {
   reactStrictMode: true,
   compress:        true,
 
+  // ── ESLint ───────────────────────────────────────────────────
+  // Skip ESLint during build on CI/Cloudflare (lint separately in dev)
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+
+  // ── TypeScript ───────────────────────────────────────────────
+  typescript: {
+    ignoreBuildErrors: false,
+  },
+
   // ── Experimental ─────────────────────────────────────────────
   experimental: {
     optimizePackageImports: ["react", "react-dom"],

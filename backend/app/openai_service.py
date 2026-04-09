@@ -1,18 +1,18 @@
-"""Signal CRM — OpenAI GPT-4o-mini Integration
+"""Signal CRM — AI Service
+Primary: Claude claude-sonnet-4-6 (Anthropic)
+Fallback: GPT-4o-mini (OpenAI)
+Fallback: Rule-based (no API key)
 
 Provides:
-  - analyze_signal()    — why this signal matters + urgency score
-  - suggest_action()    — specific next steps for the sales rep
-  - draft_email()       — compliant cold outreach email draft
-  - score_deal()        — probability score for a deal
+  - analyze_signal()       — why this signal matters + urgency + email draft
+  - draft_outreach_email() — personalized cold outreach email
 """
 import json
 import os
-from typing import Optional
 from app.config import get_settings
 
 # ---------------------------------------------------------------------------
-# Rule-based fallback (when OpenAI key not set)
+# Rule-based fallback
 # ---------------------------------------------------------------------------
 
 _SIGNAL_INSIGHTS = {
@@ -56,13 +56,13 @@ Hi {{name}},
 
 I noticed {company} is building out a team in {country} — impressive move.
 
-We work with {industry} companies scaling into {country}, specifically helping with [your offering].
+We work with {industry} companies scaling into {country}, helping with [your offering].
 
-Would it be worth a 15-minute call this week? I can share what's working for similar companies entering {country}.
+Would a 15-minute call this week work? I can share what's working for similar companies.
 
 Best,
-[Your Name]
-[Your Company]""",
+[Your Name] · [Your Company]
+To unsubscribe, reply STOP.""",
 
     "new_country_page": """\
 Subject: {company}'s {country} launch — one thing to know
@@ -71,77 +71,31 @@ Hi {{name}},
 
 I saw {company} just launched a {country}-specific page. Exciting step.
 
-Companies entering {country} often encounter [specific challenge]. We've helped [similar company] navigate this and achieve [outcome].
+Companies entering {country} often encounter compliance and local integration challenges. We've helped similar companies navigate this.
 
 Would you be open to a quick call to share what we've learned?
 
 Best,
-[Your Name]""",
+[Your Name]
+To unsubscribe, reply STOP.""",
 
-    "new_product": """\
-Subject: {product} launch — partnership opportunity?
+    "pricing_change": """\
+Subject: Saw the {company} pricing update — timing a conversation
 
 Hi {{name}},
 
-Congratulations on launching {product}. It looks like a strong addition to your lineup.
+I noticed {company} recently updated its pricing. Moments like these often prompt a fresh look at the stack.
 
-We specialize in [implementation/integration] for {industry} products in [your markets]. We'd love to explore being your local partner.
+We work with [industry] companies on [your offering] — and timing matters when evaluating alternatives.
 
-Can we jump on a 15-minute call this week?
+Worth a 15-minute call this week?
 
 Best,
-[Your Name]""",
+[Your Name] · [Your Company]
+To unsubscribe, reply STOP.""",
 }
 
-
-def _rule_based_analysis(signal: dict) -> dict:
-    """Generate analysis without OpenAI (rule-based fallback)."""
-    stype = signal.get("signal_type", "")
-    insight = _SIGNAL_INSIGHTS.get(stype, {
-        "why": "This change indicates an active buying signal — the company is investing in growth.",
-        "urgency": "MEDIUM — Act within 2 weeks for best response rates.",
-        "action_template": "Reach out with a personalized message referencing this specific change.",
-    })
-
-    country = signal.get("country_hint", "this market")
-    company = signal.get("account_name", "this company")
-    industry = "technology"
-
-    email_tmpl = _EMAIL_TEMPLATES.get(stype, _EMAIL_TEMPLATES.get("new_country_page", ""))
-    email_draft = email_tmpl.format(
-        country=country,
-        company=company,
-        industry=industry,
-        product=signal.get("title", "new product"),
-    )
-
-    return {
-        "why_important": insight["why"],
-        "urgency": insight["urgency"],
-        "suggested_action": insight["action_template"].format(country=country),
-        "email_draft": email_draft,
-        "ai_score": signal.get("score", 7),
-        "source": "rule-based",
-    }
-
-
-# ---------------------------------------------------------------------------
-# OpenAI-powered analysis
-# ---------------------------------------------------------------------------
-
-async def analyze_signal(signal: dict) -> dict:
-    """Analyze a signal using OpenAI GPT-4o-mini. Falls back to rules if key not set."""
-    settings = get_settings()
-    api_key = settings.OPENAI_API_KEY or os.environ.get("OPENAI_API_KEY", "")
-
-    if not api_key:
-        return _rule_based_analysis(signal)
-
-    try:
-        from openai import AsyncOpenAI
-        client = AsyncOpenAI(api_key=api_key)
-
-        system_prompt = """You are a B2B sales intelligence expert helping Indian exporters, IT services firms, and SaaS agencies identify and act on expansion signals from global companies.
+_SYSTEM_PROMPT = """You are a B2B sales intelligence expert helping Indian exporters, IT services firms, and SaaS agencies identify and act on expansion signals from global companies.
 
 Your job: analyze a web signal and return actionable sales intelligence.
 
@@ -149,10 +103,34 @@ Return a JSON object with these exact keys:
 - why_important: (2-3 sentences) why this signal matters for a B2B sales rep
 - urgency: one of HIGH/MEDIUM/LOW with a brief reason
 - suggested_action: specific next step (who to contact, what to say, what to offer)
-- email_draft: a short cold outreach email (subject line + 4-5 sentence body)
+- email_draft: a personalized cold outreach email (subject line + 4-5 sentence body + unsubscribe note)
 - ai_score: integer 1-10 indicating signal strength for B2B sales"""
 
-        user_prompt = f"""Signal data:
+
+def _rule_based_analysis(signal: dict) -> dict:
+    stype   = signal.get("signal_type", "")
+    insight = _SIGNAL_INSIGHTS.get(stype, {
+        "why": "This change indicates an active buying signal — the company is investing in growth.",
+        "urgency": "MEDIUM — Act within 2 weeks for best response rates.",
+        "action_template": "Reach out with a personalized message referencing this specific change.",
+    })
+    country = signal.get("country_hint", "this market")
+    company = signal.get("account_name", "this company")
+    tmpl    = _EMAIL_TEMPLATES.get(stype, _EMAIL_TEMPLATES.get("new_country_page", ""))
+    email   = tmpl.format(country=country, company=company, industry="technology",
+                          product=signal.get("title", "new product"))
+    return {
+        "why_important":    insight["why"],
+        "urgency":          insight["urgency"],
+        "suggested_action": insight["action_template"].format(country=country),
+        "email_draft":      email,
+        "ai_score":         signal.get("score", 7),
+        "source":           "rule-based",
+    }
+
+
+def _signal_user_prompt(signal: dict) -> str:
+    return f"""Signal data:
 Company: {signal.get('account_name', 'Unknown')}
 Signal type: {signal.get('signal_type', 'unknown')}
 Title: {signal.get('title', '')}
@@ -161,28 +139,128 @@ Country: {signal.get('country_hint', 'unknown')}
 Proof: {signal.get('proof_text', '')}
 Current recommendation: {signal.get('recommended_action', '')}
 
-Analyze this for a B2B sales rep targeting exporters, IT services, and SaaS companies."""
+Analyze this for a B2B sales rep targeting Indian exporters, IT services, and SaaS companies."""
 
-        resp = await client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            response_format={"type": "json_object"},
-            max_tokens=600,
-            temperature=0.4,
-        )
 
-        result = json.loads(resp.choices[0].message.content)
-        result["source"] = "gpt-4o-mini"
-        return result
+# ---------------------------------------------------------------------------
+# Claude (Anthropic) — primary AI engine
+# ---------------------------------------------------------------------------
 
-    except Exception as e:
-        # Fallback silently
-        result = _rule_based_analysis(signal)
-        result["source"] = "rule-based-fallback"
-        return result
+async def _claude_analyze(signal: dict, api_key: str) -> dict:
+    from anthropic import AsyncAnthropic
+    client = AsyncAnthropic(api_key=api_key)
+
+    msg = await client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=700,
+        system=_SYSTEM_PROMPT + "\n\nIMPORTANT: Return ONLY valid JSON. No markdown, no extra text.",
+        messages=[{"role": "user", "content": _signal_user_prompt(signal)}],
+    )
+    text   = msg.content[0].text.strip()
+    result = json.loads(text)
+    result["source"] = "claude-sonnet-4-6"
+    return result
+
+
+async def _claude_draft_email(signal: dict, sender_name: str, sender_company: str, offering: str, api_key: str) -> str:
+    from anthropic import AsyncAnthropic
+    client = AsyncAnthropic(api_key=api_key)
+
+    prompt = f"""Write a short, personalized cold outreach email from {sender_name} at {sender_company}.
+
+Context:
+- Target company: {signal.get('account_name', 'Unknown')}
+- Signal: {signal.get('title', '')}
+- Signal type: {signal.get('signal_type', '')}
+- Target country: {signal.get('country_hint', 'global')}
+- Our offering: {offering}
+- Signal proof: {signal.get('proof_text', '')}
+
+Requirements:
+- Professional but warm
+- Reference the signal naturally (don't say "I saw your signal")
+- Clear value proposition related to their expansion or the signal
+- CTA: request a 15-minute call
+- 4-5 sentences max in body
+- First line: Subject: ...
+- GDPR/CAN-SPAM compliant: include opt-out note at end
+- Return ONLY the email text, no explanations"""
+
+    msg = await client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=350,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return msg.content[0].text.strip()
+
+
+# ---------------------------------------------------------------------------
+# OpenAI — secondary AI engine
+# ---------------------------------------------------------------------------
+
+async def _openai_analyze(signal: dict, api_key: str) -> dict:
+    from openai import AsyncOpenAI
+    client = AsyncOpenAI(api_key=api_key)
+
+    resp = await client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": _signal_user_prompt(signal)},
+        ],
+        response_format={"type": "json_object"},
+        max_tokens=600,
+        temperature=0.4,
+    )
+    result = json.loads(resp.choices[0].message.content)
+    result["source"] = "gpt-4o-mini"
+    return result
+
+
+async def _openai_draft_email(signal: dict, sender_name: str, sender_company: str, offering: str, api_key: str) -> str:
+    from openai import AsyncOpenAI
+    client = AsyncOpenAI(api_key=api_key)
+
+    prompt = f"""Write a short personalized cold outreach email from {sender_name} at {sender_company}.
+Target: {signal.get('account_name')} | Signal: {signal.get('title')} | Country: {signal.get('country_hint')} | Offering: {offering}
+Proof: {signal.get('proof_text', '')}
+Requirements: Professional, reference the signal naturally, clear CTA (15-min call), 4-5 sentences, Subject: on first line, opt-out note at end."""
+
+    resp = await client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=300,
+        temperature=0.5,
+    )
+    return resp.choices[0].message.content
+
+
+# ---------------------------------------------------------------------------
+# Public API — Claude primary → OpenAI fallback → Rule-based
+# ---------------------------------------------------------------------------
+
+async def analyze_signal(signal: dict) -> dict:
+    """Analyze a signal. Claude → OpenAI → rule-based fallback."""
+    settings     = get_settings()
+    claude_key   = settings.ANTHROPIC_API_KEY or os.environ.get("ANTHROPIC_API_KEY", "")
+    openai_key   = settings.OPENAI_API_KEY    or os.environ.get("OPENAI_API_KEY", "")
+
+    # 1. Try Claude
+    if claude_key:
+        try:
+            return await _claude_analyze(signal, claude_key)
+        except Exception as e:
+            print(f"[AI] Claude analyze failed: {type(e).__name__}: {e}")
+
+    # 2. Try OpenAI
+    if openai_key:
+        try:
+            return await _openai_analyze(signal, openai_key)
+        except Exception as e:
+            print(f"[AI] OpenAI analyze failed: {type(e).__name__}: {e}")
+
+    # 3. Rule-based
+    return _rule_based_analysis(signal)
 
 
 async def draft_outreach_email(
@@ -191,56 +269,34 @@ async def draft_outreach_email(
     sender_company: str = "[Your Company]",
     offering: str = "cross-border IT services",
 ) -> str:
-    """Generate a personalized cold outreach email based on a signal."""
-    settings = get_settings()
-    api_key = settings.OPENAI_API_KEY or os.environ.get("OPENAI_API_KEY", "")
+    """Draft cold outreach email. Claude → OpenAI → rule-based fallback."""
+    settings   = get_settings()
+    claude_key = settings.ANTHROPIC_API_KEY or os.environ.get("ANTHROPIC_API_KEY", "")
+    openai_key = settings.OPENAI_API_KEY    or os.environ.get("OPENAI_API_KEY", "")
 
-    company = signal.get("account_name", "your company")
     country = signal.get("country_hint", "new markets")
-    stype = signal.get("signal_type", "")
+    company = signal.get("account_name", "your company")
+    stype   = signal.get("signal_type", "")
 
-    if not api_key:
-        tmpl = _EMAIL_TEMPLATES.get(stype, _EMAIL_TEMPLATES.get("new_country_page", ""))
-        return tmpl.format(
-            country=country, company=company,
-            industry="technology", product=signal.get("title", "new product")
-        ).replace("[Your Name]", sender_name).replace("[Your Company]", sender_company)
+    # 1. Try Claude
+    if claude_key:
+        try:
+            return await _claude_draft_email(signal, sender_name, sender_company, offering, claude_key)
+        except Exception as e:
+            print(f"[AI] Claude email failed: {type(e).__name__}: {e}")
 
-    try:
-        from openai import AsyncOpenAI
-        client = AsyncOpenAI(api_key=api_key)
+    # 2. Try OpenAI
+    if openai_key:
+        try:
+            return await _openai_draft_email(signal, sender_name, sender_company, offering, openai_key)
+        except Exception as e:
+            print(f"[AI] OpenAI email failed: {type(e).__name__}: {e}")
 
-        prompt = f"""Write a short, personalized cold outreach email from {sender_name} at {sender_company}.
-
-Context:
-- Target company: {company}
-- Signal: {signal.get('title', '')}
-- Signal type: {stype}
-- Target country: {country}
-- Our offering: {offering}
-- Signal proof: {signal.get('proof_text', '')}
-
-Requirements:
-- Professional but warm
-- Reference the specific signal naturally (don't say "I saw your signal")
-- Clear value proposition related to {country} expansion or the signal
-- CTA: request a 15-minute call
-- 4-5 sentences max in body
-- Include: Subject line on first line, then blank line, then body
-- GDPR/CAN-SPAM compliant: include opt-out note at end"""
-
-        resp = await client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=300,
-            temperature=0.5,
-        )
-
-        return resp.choices[0].message.content
-
-    except Exception:
-        tmpl = _EMAIL_TEMPLATES.get(stype, _EMAIL_TEMPLATES.get("new_country_page", ""))
-        return tmpl.format(
-            country=country, company=company,
-            industry="technology", product=signal.get("title", "new product")
-        ).replace("[Your Name]", sender_name).replace("[Your Company]", sender_company)
+    # 3. Rule-based template
+    tmpl = _EMAIL_TEMPLATES.get(stype, _EMAIL_TEMPLATES.get("new_country_page", ""))
+    return (
+        tmpl.format(country=country, company=company, industry="technology",
+                    product=signal.get("title", "new product"))
+        .replace("[Your Name]", sender_name)
+        .replace("[Your Company]", sender_company)
+    )

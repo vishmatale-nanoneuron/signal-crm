@@ -304,8 +304,10 @@ async def ai_chat(
     from app.models import Deal
     import os
 
-    settings = get_settings()
-    api_key = settings.OPENAI_API_KEY or os.environ.get("OPENAI_API_KEY", "")
+    settings     = get_settings()
+    claude_key   = settings.ANTHROPIC_API_KEY or os.environ.get("ANTHROPIC_API_KEY", "")
+    openai_key   = settings.OPENAI_API_KEY    or os.environ.get("OPENAI_API_KEY", "")
+    api_key      = claude_key or openai_key   # for rule-based fallback check
 
     # Load user's top signals for context
     sig_r = await db.execute(
@@ -376,29 +378,51 @@ RULES:
             resp = f"Hi! I'm Signal AI. You have **{len(signals)} active signals** and **{len(active)} deals** in pipeline.\n\nAsk me:\n• _Which signals should I act on today?_\n• _Draft an email for [Company]_\n• _Can I cold email Germany?_\n• _What's my best pipeline deal?_"
         return {"success": True, "message": resp, "source": "rule-based"}
 
-    # OpenAI path
-    try:
-        from openai import AsyncOpenAI
-        client = AsyncOpenAI(api_key=api_key)
+    # Claude (primary)
+    if claude_key:
+        try:
+            from anthropic import AsyncAnthropic
+            client = AsyncAnthropic(api_key=claude_key)
 
-        msgs = [{"role": "system", "content": system_prompt}]
-        for m in req.messages[-12:]:
-            msgs.append({"role": m.role, "content": m.content})
+            msgs = []
+            for m in req.messages[-12:]:
+                msgs.append({"role": m.role, "content": m.content})
 
-        result = await client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=msgs,
-            max_tokens=350,
-            temperature=0.45,
-        )
-        return {"success": True, "message": result.choices[0].message.content, "source": "gpt-4o-mini"}
+            result = await client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=400,
+                system=system_prompt,
+                messages=msgs,
+            )
+            return {"success": True, "message": result.content[0].text, "source": "claude-sonnet-4-6"}
+        except Exception as e:
+            print(f"[AI Chat] Claude error: {type(e).__name__}: {e}")
 
-    except Exception as e:
-        print(f"[AI Chat] OpenAI error: {type(e).__name__}: {e}")
-        if signals:
-            s = signals[0]
-            return {"success": True, "message": f"AI temporarily unavailable.\n\nYour top signal: **{s.account_name}** — {s.title}. Score: {s.score}/10.\n\nRecommended action: {s.recommended_action}", "source": "fallback"}
-        return {"success": True, "message": "AI temporarily unavailable. Check your OpenAI API key in Railway settings.", "source": "fallback"}
+    # OpenAI (fallback)
+    if openai_key:
+        try:
+            from openai import AsyncOpenAI
+            client = AsyncOpenAI(api_key=openai_key)
+
+            msgs = [{"role": "system", "content": system_prompt}]
+            for m in req.messages[-12:]:
+                msgs.append({"role": m.role, "content": m.content})
+
+            result = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=msgs,
+                max_tokens=350,
+                temperature=0.45,
+            )
+            return {"success": True, "message": result.choices[0].message.content, "source": "gpt-4o-mini"}
+        except Exception as e:
+            print(f"[AI Chat] OpenAI error: {type(e).__name__}: {e}")
+
+    # Rule-based fallback
+    if signals:
+        s = signals[0]
+        return {"success": True, "message": f"AI temporarily unavailable.\n\nYour top signal: **{s.account_name}** — {s.title}. Score: {s.score}/10.\n\nRecommended action: {s.recommended_action}", "source": "fallback"}
+    return {"success": True, "message": "AI temporarily unavailable. Add ANTHROPIC_API_KEY in Railway settings.", "source": "fallback"}
 
 
 class DraftEmailReq(BaseModel):
