@@ -91,50 +91,17 @@ def check_compliance(country: str = Query(...)):
 
 
 @compliance_router.post("/save")
-def save_compliance(req: SaveComplianceReq, user: dict = Depends(get_current_user)):
-    sb = get_supabase()
+async def save_compliance(req: SaveComplianceReq, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     data = COMPLIANCE_DATA.get(req.country, {})
-    row = {
-        "user_id": user["id"],
-        "country": req.country,
-        "framework": data.get("framework", ""),
-        "notes": req.notes,
-    }
-    result = sb.table("compliance_saves").insert(row).execute()
-    return {"success": True, "saved": result.data[0], "message": f"Compliance note for {req.country} saved."}
-
-
-@compliance_router.get("/saved")
-def get_saved(user: dict = Depends(get_current_user)):
-    sb = get_supabase()
-    result = sb.table("compliance_saves").select("*").eq("user_id", user["id"]).order("created_at", desc=True).execute()
-    return {"success": True, "saved": result.data or [], "total": len(result.data or [])}
-
-
-# Override the save/saved endpoints with SQLAlchemy versions
-from fastapi import Depends as _Depends
-from sqlalchemy.ext.asyncio import AsyncSession as _AsyncSession
-from app.database import get_db as _get_db
-from app.models import ComplianceSave as _ComplianceSave, User as _User
-from app.auth import get_current_user as _get_current_user
-from sqlalchemy import select as _select
-from pydantic import BaseModel as _BaseModel
-
-class _SaveReq(_BaseModel):
-    country: str
-    notes: str = ""
-
-@compliance_router.post("/save")
-async def save_compliance_pg(req: _SaveReq, user: _User = _Depends(_get_current_user), db: _AsyncSession = _Depends(_get_db)):
-    data = COMPLIANCE_DATA.get(req.country, {})
-    save = _ComplianceSave(user_id=user.id, country=req.country, framework=data.get("framework",""), notes=req.notes)
+    save = ComplianceSave(user_id=user.id, country=req.country, framework=data.get("framework", ""), notes=req.notes)
     db.add(save)
     await db.commit()
     await db.refresh(save)
     return {"success": True, "saved": {"id": save.id, "country": save.country}, "message": f"Saved compliance note for {req.country}."}
 
+
 @compliance_router.get("/saved")
-async def get_saved_pg(user: _User = _Depends(_get_current_user), db: _AsyncSession = _Depends(_get_db)):
-    r = await db.execute(_select(_ComplianceSave).where(_ComplianceSave.user_id == user.id).order_by(_ComplianceSave.created_at.desc()))
+async def get_saved(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    r = await db.execute(select(ComplianceSave).where(ComplianceSave.user_id == user.id).order_by(ComplianceSave.created_at.desc()))
     items = r.scalars().all()
     return {"success": True, "saved": [{"id": s.id, "country": s.country, "framework": s.framework, "notes": s.notes} for s in items]}
