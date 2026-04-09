@@ -1,109 +1,178 @@
-# Signal CRM — Deploy Guide
-**Backend → Railway** | **Frontend → Cloudflare Pages** | **Domain → nanoneuron.ai**
+# Signal CRM — Deployment Guide
+
+Complete setup: Supabase → Railway (backend) → Cloudflare Pages (frontend)
 
 ---
 
-## STEP 1 — Deploy Backend on Railway
+## 1. Supabase Database
 
-### 1.1 Create Railway project
-1. Go to **railway.app** → New Project
-2. Select **"Deploy from GitHub repo"**
-3. Choose your repo (e.g. `your-github/signal-crm`)
-4. Set **Root Directory** = `backend`
-5. Railway detects the Dockerfile → click **Deploy**
+1. Go to [supabase.com](https://supabase.com) → New project
+2. Note your project credentials:
+   - **Project URL**: `https://<project-ref>.supabase.co`
+   - **Anon key**: Settings → API
+   - **Service role key**: Settings → API
+   - **Direct DB URL**: Settings → Database → Connection string → URI (port **5432**)
+   - **Pooler URL** (optional): port **6543** — use if Railway hits connection limits
 
-### 1.2 Add PostgreSQL database
-1. In Railway project → click **"+ New"** → **Database** → **PostgreSQL**
-2. Railway auto-injects `DATABASE_URL` into your backend service ✅
-3. Tables are created automatically on first startup
+3. Open **SQL Editor** → paste entire contents of `database_schema.sql` → Run
 
-### 1.3 Set environment variables
-In Railway → backend service → **Variables** tab:
-
-| Variable | Value |
-|---|---|
-| `JWT_SECRET` | Run: `python3 -c "import secrets; print(secrets.token_hex(32))"` |
-| `EXTRA_CORS_ORIGINS` | Add after Step 2 — your Cloudflare Pages URL |
-
-> `DATABASE_URL` is auto-set by Railway PostgreSQL — do NOT add it manually.
-
-### 1.4 Get your backend URL
-After deploy, Railway gives you: `https://signal-crm-production.up.railway.app`
-
-**Custom domain** (optional — api.nanoneuron.ai):
-- Railway → backend service → Settings → Domains → Add Custom Domain
-- Add CNAME: `api` → `signal-crm-production.up.railway.app` in Cloudflare DNS
+4. Verify in Table Editor: `profiles`, `web_signals`, `watchlist_accounts`, `deals`, `leads`, `compliance_saves` tables exist
 
 ---
 
-## STEP 2 — Deploy Frontend on Cloudflare Pages
+## 2. Railway — Backend
 
-### 2.1 Connect repo to Cloudflare Pages
-1. Go to **Cloudflare Dashboard** → Workers & Pages → Create application → Pages
-2. Connect GitHub → select your repo
-3. Set build settings:
+### Create project
+
+1. Go to [railway.app](https://railway.app) → New Project → Deploy from GitHub repo
+2. Select repo: `vishmatale-nanoneuron/signal-crm`
+3. Set **Root Directory**: `backend`
+4. Railway auto-detects Nixpacks + `requirements.txt`
+
+### Environment variables
+
+Set these in Railway → Variables:
+
+```
+DATABASE_URL=postgresql+asyncpg://postgres.<ref>:<password>@aws-0-ap-south-1.pooler.supabase.com:6543/postgres
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_ANON_KEY=<anon-key>
+SUPABASE_SERVICE_KEY=<service-role-key>
+JWT_SECRET=<generate: openssl rand -hex 32>
+JWT_ALGORITHM=HS256
+CORS_ORIGINS=https://signal.nanoneuron.ai,https://signal-crm.pages.dev
+ANTHROPIC_API_KEY=<your-claude-api-key>
+OPENAI_API_KEY=<your-openai-key>
+RAZORPAY_KEY_ID=<razorpay-key>
+RAZORPAY_KEY_SECRET=<razorpay-secret>
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=<your-gmail>
+SMTP_PASS=<app-password>
+FROM_EMAIL=noreply@nanoneuron.ai
+```
+
+> **Note**: Use port `6543` (pgbouncer) for Railway to avoid connection limits. The backend auto-detects this and disables prepared statements.
+
+### Deploy
+
+Railway deploys automatically on push. The `railway.toml` and `Procfile` are already configured:
+- Start: `gunicorn app.main:app -k uvicorn.workers.UvicornWorker -w 2 --bind 0.0.0.0:$PORT`
+- Health check: `GET /api/health`
+
+### Note your Railway URL
+
+It will be something like: `https://signal-crm-production.up.railway.app`
+
+---
+
+## 3. Cloudflare Pages — Frontend
+
+### Create project
+
+1. Go to [pages.cloudflare.com](https://pages.cloudflare.com) → Create a project → Connect to Git
+2. Select repo: `vishmatale-nanoneuron/signal-crm`
+3. Settings:
+   - **Root directory**: `frontend`
    - **Framework preset**: Next.js (Static HTML Export)
    - **Build command**: `npm run build`
    - **Build output directory**: `out`
-   - **Root directory**: `frontend`
 
-### 2.2 Set environment variables
-In Cloudflare Pages → Settings → Environment Variables → Production:
+### Environment variables (Cloudflare Pages → Settings → Environment variables)
 
-| Variable | Value |
-|---|---|
-| `NEXT_PUBLIC_API_URL` | `https://signal-crm-production.up.railway.app` (your Railway URL) |
+```
+NEXT_PUBLIC_API_URL=https://signal-crm-production.up.railway.app
+NEXT_PUBLIC_APP_NAME=Signal CRM
+NEXT_PUBLIC_SITE_URL=https://signal.nanoneuron.ai
+NEXT_PUBLIC_RAZORPAY_KEY=<razorpay-key-id>
+NODE_VERSION=20
+```
 
-### 2.3 Custom domain — nanoneuron.ai
-1. Cloudflare Pages → your project → Custom domains → Add
-2. Enter `nanoneuron.ai` and `www.nanoneuron.ai`
-3. Cloudflare auto-creates DNS records ✅
+> Set these for **Production** environment.
+
+### Deploy
+
+Push to `main` branch → Cloudflare Pages builds and deploys automatically.
 
 ---
 
-## STEP 3 — Update CORS after both are live
+## 4. Custom Domain — signal.nanoneuron.ai
 
-In Railway → backend → Variables:
-```
-EXTRA_CORS_ORIGINS = https://nanoneuron.ai,https://www.nanoneuron.ai
-```
+### In Cloudflare Pages
 
-Then redeploy backend (Railway auto-redeploys on env var change).
+1. Pages project → Custom domains → Add custom domain
+2. Enter: `signal.nanoneuron.ai`
+3. Cloudflare will show you a CNAME record to add
+
+### In your DNS (Cloudflare DNS for nanoneuron.ai)
+
+If nanoneuron.ai is already on Cloudflare:
+1. DNS → Add record
+2. Type: `CNAME`
+3. Name: `signal`
+4. Target: `<your-pages-project>.pages.dev`
+5. Proxy: **Proxied** (orange cloud)
+
+SSL is automatic via Cloudflare.
 
 ---
 
-## STEP 4 — Verify deployment
+## 5. Post-Deploy Checklist
+
+- [ ] `GET https://signal-crm-production.up.railway.app/api/health` returns `{"status":"ok"}`
+- [ ] `https://signal.nanoneuron.ai` loads the landing page
+- [ ] Register a new account → dashboard shows demo signals
+- [ ] Settings page → update profile → password change works
+- [ ] Watchlist → add a company → scan runs
+- [ ] AI analysis returns (check Railway logs for Claude/OpenAI calls)
+
+---
+
+## 6. Supabase RLS — Verify
+
+In Supabase SQL Editor:
+
+```sql
+-- Check RLS is enabled on all tables
+SELECT tablename, rowsecurity
+FROM pg_tables
+WHERE schemaname = 'public'
+ORDER BY tablename;
+```
+
+All tables should show `rowsecurity = true`.
+
+---
+
+## 7. Generate JWT Secret
 
 ```bash
-# Health check
-curl https://signal-crm-production.up.railway.app/api/health
-
-# Expected response:
-# {"status":"healthy","app":"Signal CRM","version":"2.0.0",...}
+openssl rand -hex 32
 ```
 
-Then open: **https://nanoneuron.ai** → register → dashboard loads signals ✅
+Use this value for `JWT_SECRET` in Railway.
 
 ---
 
-## Modules live after deploy
+## 8. AI Keys Priority
 
-| Module | Route | What it does |
-|---|---|---|
-| Auth | `/api/auth/` | Register, login, JWT tokens |
-| Signals | `/api/signals/` | Web change signals feed |
-| Watchlist | `/api/watchlist/` | Track target companies |
-| Buyer Map | `/api/buyer-map/` | Suggest titles to contact |
-| Compliance | `/api/compliance/` | Country outbound rules |
-| Deals | `/api/deals/` | Pipeline tracker |
-| Next Actions | `/api/next-actions/` | AI-ranked action queue |
-| Leads | `/api/leads/` | Lead management |
-| Payment | `/api/payment/` | Razorpay integration |
+Signal CRM uses a fallback chain:
+1. **Claude** (`claude-sonnet-4-6`) — set `ANTHROPIC_API_KEY`
+2. **OpenAI** (`gpt-4o-mini`) — set `OPENAI_API_KEY`
+3. **Rule-based** — works with no API keys (limited but functional)
+
+For production, set at least `ANTHROPIC_API_KEY`.
 
 ---
 
-## Pricing (once live)
+## Quick Reference
 
-- **Starter**: ₹8,000/month — 1 user, 25 watchlist accounts
-- **Growth**: ₹25,000/month — 5 users, 100 accounts
-- **Agency**: ₹75,000/month — unlimited users + white-label
+| Service | URL |
+|---------|-----|
+| Backend API | `https://signal-crm-production.up.railway.app` |
+| API Docs | `https://signal-crm-production.up.railway.app/docs` |
+| Health | `https://signal-crm-production.up.railway.app/api/health` |
+| Frontend | `https://signal.nanoneuron.ai` |
+| Supabase | `https://app.supabase.com/project/<ref>` |
+| Railway | `https://railway.app/project/<id>` |
+| Cloudflare | `https://dash.cloudflare.com` |

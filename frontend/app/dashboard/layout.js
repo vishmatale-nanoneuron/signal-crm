@@ -27,6 +27,7 @@ const NAV = [
   { href: "/dashboard/next-actions",     label: "Next Actions" },
   { href: "/dashboard/country-intel",    label: "Country Intel" },
   { href: "/dashboard/email-templates",  label: "Email" },
+  { href: "/dashboard/settings",         label: "Settings" },
 ];
 
 const FREE_PATHS = ["/dashboard/payment"];

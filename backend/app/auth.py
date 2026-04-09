@@ -256,6 +256,69 @@ async def login(req: LoginReq, db: AsyncSession = Depends(get_db)):
     }
 
 
+class ProfileUpdateReq(BaseModel):
+    name:         str | None = None
+    company_name: str | None = None
+    phone:        str | None = None
+
+
+class PasswordChangeReq(BaseModel):
+    current_password: str
+    new_password:     str
+
+
+@auth.patch("/profile")
+async def update_profile(
+    req: ProfileUpdateReq,
+    user: User = Depends(get_user_no_trial_check),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update display name, company, phone."""
+    changed = False
+    if req.name is not None:
+        user.name = req.name.strip()
+        changed = True
+    if req.company_name is not None:
+        user.company_name = req.company_name.strip()
+        changed = True
+    if req.phone is not None:
+        user.phone = req.phone.strip()
+        changed = True
+    if changed:
+        user.updated_at = datetime.utcnow()
+        await db.commit()
+        await db.refresh(user)
+    return {
+        "success": True,
+        "message": "Profile updated.",
+        "user": {
+            "id":      user.id,
+            "name":    user.name,
+            "email":   user.email,
+            "company": user.company_name,
+            "phone":   getattr(user, "phone", ""),
+            "plan":    user.plan,
+        },
+    }
+
+
+@auth.post("/change-password")
+async def change_password(
+    req: PasswordChangeReq,
+    user: User = Depends(get_user_no_trial_check),
+    db: AsyncSession = Depends(get_db),
+):
+    """Change password — requires current password for verification."""
+    if not verify_password(req.current_password, user.password_hash):
+        raise HTTPException(400, "Current password is incorrect.")
+    if len(req.new_password) < 8:
+        raise HTTPException(400, "New password must be at least 8 characters.")
+    user.password_hash = hash_password(req.new_password)
+    user.updated_at    = datetime.utcnow()
+    await db.commit()
+    return {"success": True, "message": "Password changed successfully."}
+
+
 @auth.get("/me")
 async def me(user: User = Depends(get_user_no_trial_check), db: AsyncSession = Depends(get_db)):
     return {
