@@ -2,8 +2,6 @@
 import { useState, useEffect } from "react";
 import { apiFetch, getUser, saveAuth } from "../../../lib/api";
 
-export const metadata = { title: "Settings" };
-
 function Section({ title, children }) {
   return (
     <div style={{ background:"#1a1a1a", border:"1px solid rgba(255,255,255,0.07)", borderRadius:8, marginBottom:20, overflow:"hidden" }}>
