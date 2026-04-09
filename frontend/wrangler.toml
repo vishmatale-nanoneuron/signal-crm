@@ -1,0 +1,10 @@
+name = "signal-crm"
+compatibility_date = "2024-09-23"
+pages_build_output_dir = "out"
+
+# Environment variables available at build time
+# Set secret values in Cloudflare Dashboard → Pages → Settings → Environment Variables
+[vars]
+NEXT_PUBLIC_APP_NAME    = "Signal CRM"
+NEXT_PUBLIC_SITE_URL    = "https://signal.nanoneuron.ai"
+NEXT_PUBLIC_APP_VERSION = "3.2.0"

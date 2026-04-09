@@ -6,11 +6,11 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start -p 3000",
+    "build:cf": "next build",
+    "start": "npx serve out -p 3000",
     "lint": "next lint",
     "lint:fix": "next lint --fix",
-    "type-check": "tsc --noEmit",
-    "analyze": "ANALYZE=true next build"
+    "preview": "npx wrangler pages dev out"
   },
   "dependencies": {
     "next": "15.0.0",
@@ -19,7 +19,8 @@
   },
   "devDependencies": {
     "eslint": "^9.0.0",
-    "eslint-config-next": "15.0.0"
+    "eslint-config-next": "15.0.0",
+    "wrangler": "^3.0.0"
   },
   "engines": {
     "node": ">=20.0.0",

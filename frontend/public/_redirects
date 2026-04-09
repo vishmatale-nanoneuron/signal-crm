@@ -1,1 +1,13 @@
-/*    /index.html    200
+# Signal CRM — Cloudflare Pages Redirects
+# Docs: https://developers.cloudflare.com/pages/configuration/redirects/
+
+# ── Legacy URL redirects ──────────────────────────────────────
+/home       /           301
+/signin     /login/     301
+/register   /login/     301
+/app        /dashboard/ 301
+
+# ── SPA fallback — must be LAST ───────────────────────────────
+# All unmatched paths → index.html with 200 (not 301)
+# This lets Next.js client-side router handle all routes
+/*          /index.html 200
