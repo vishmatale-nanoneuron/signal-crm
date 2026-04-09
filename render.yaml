@@ -4,22 +4,42 @@ services:
     runtime: python
     rootDir: backend
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+    startCommand: gunicorn app.main:app -k uvicorn.workers.UvicornWorker -w 2 --bind 0.0.0.0:$PORT --timeout 120 --graceful-timeout 60 --access-logfile - --error-logfile -
     plan: free
     healthCheckPath: /api/health
     envVars:
       - key: DATABASE_URL
-        value: postgresql+asyncpg://signal_crm_user:KskWQ1COEM6MrJuYsBRJN4D71gspdcKg@dpg-d75fjumdqaus73bb3aug-a/signal_crm
+        sync: false   # Set in Render dashboard: your Supabase connection string
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
       - key: JWT_SECRET
-        value: SignalCRM2026Prod!SecureKey#X9mK2pL
+        sync: false
       - key: JWT_ALGORITHM
         value: HS256
+      - key: CORS_ORIGINS
+        value: https://signal.nanoneuron.ai,https://signal-crm.pages.dev
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
       - key: RAZORPAY_KEY_ID
         value: rzp_test_SXSbotImCIeKSM
       - key: RAZORPAY_KEY_SECRET
-        value: K7mIRyHhIqL2eDCTrcLjP2i5
-      - key: EXTRA_CORS_ORIGINS
-        value: https://signal-crm.pages.dev
+        sync: false
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: FROM_EMAIL
+        value: noreply@nanoneuron.ai
       - key: BANK_NAME
         value: Axis Bank Ltd
       - key: BANK_ACCOUNT_NUMBER
