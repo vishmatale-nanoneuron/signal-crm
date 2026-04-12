@@ -54,9 +54,16 @@ export default function DashboardLayout({ children }) {
   const [chatMsgs,    setChatMsgs]    = useState([]);
   const [chatInput,   setChatInput]   = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  // Command palette (Cmd/Ctrl+K)
+  const [cmdOpen,    setCmdOpen]    = useState(false);
+  const [cmdQuery,   setCmdQuery]   = useState("");
+  const [cmdResults, setCmdResults] = useState([]);
+  const [cmdLoading, setCmdLoading] = useState(false);
+  const [cmdIdx,     setCmdIdx]     = useState(0);
   const dropdownRef = useRef(null);
   const bellRef     = useRef(null);
   const chatEndRef  = useRef(null);
+  const cmdInputRef = useRef(null);
   const toastTimer  = useRef(null);
 
   const showToast = useCallback((msg, type = "error") => {
@@ -151,12 +158,49 @@ export default function DashboardLayout({ children }) {
     return () => document.removeEventListener("mousedown", handler);
   }, [profileOpen]);
 
-  // Close dropdown on Escape key
+  // Close dropdown on Escape key + open command palette on Cmd/Ctrl+K
   useEffect(() => {
-    const handler = (e) => { if (e.key === "Escape") { setProfileOpen(false); setBellOpen(false); setChatOpen(false); } };
+    const handler = (e) => {
+      if (e.key === "Escape") {
+        setProfileOpen(false); setBellOpen(false); setChatOpen(false);
+        setCmdOpen(false); setCmdQuery(""); setCmdResults([]);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setCmdOpen(o => { if (!o) { setCmdQuery(""); setCmdResults([]); setCmdIdx(0); } return !o; });
+        setTimeout(() => cmdInputRef.current?.focus(), 50);
+      }
+    };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, []);
+
+  // Command palette search
+  useEffect(() => {
+    if (!cmdOpen || cmdQuery.trim().length < 2) { setCmdResults([]); return; }
+    const t = setTimeout(async () => {
+      setCmdLoading(true);
+      const d = await apiFetch(`/analytics/search?q=${encodeURIComponent(cmdQuery.trim())}`);
+      if (d.success) { setCmdResults(d.results || []); setCmdIdx(0); }
+      setCmdLoading(false);
+    }, 220);
+    return () => clearTimeout(t);
+  }, [cmdQuery, cmdOpen]);
+
+  // Command palette keyboard nav (arrow + enter)
+  useEffect(() => {
+    if (!cmdOpen) return;
+    const handler = (e) => {
+      if (e.key === "ArrowDown") { e.preventDefault(); setCmdIdx(i => Math.min(i+1, cmdResults.length-1)); }
+      if (e.key === "ArrowUp")   { e.preventDefault(); setCmdIdx(i => Math.max(i-1, 0)); }
+      if (e.key === "Enter" && cmdResults[cmdIdx]) {
+        router.push(cmdResults[cmdIdx].url);
+        setCmdOpen(false); setCmdQuery(""); setCmdResults([]);
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [cmdOpen, cmdResults, cmdIdx]);
 
   // Close bell on outside click
   useEffect(() => {
@@ -225,7 +269,104 @@ export default function DashboardLayout({ children }) {
       <style>{`
         @keyframes slideDown { from { opacity:0; transform:translateX(-50%) translateY(-10px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
         @keyframes spin { to { transform:rotate(360deg); } }
+        @keyframes cmdFadeIn { from{opacity:0;transform:translateX(-50%) translateY(-12px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
       `}</style>
+
+      {/* Command Palette (Cmd/Ctrl+K) */}
+      {cmdOpen && (
+        <div onClick={() => { setCmdOpen(false); setCmdQuery(""); setCmdResults([]); }}
+          style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:9000,backdropFilter:"blur(4px)" }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{
+              position:"fixed",top:"18%",left:"50%",transform:"translateX(-50%)",
+              width:"min(640px,90vw)",background:"#1a1a1a",
+              border:"1px solid rgba(255,255,255,0.12)",borderRadius:12,
+              boxShadow:"0 20px 80px rgba(0,0,0,0.8)",overflow:"hidden",
+              animation:"cmdFadeIn 0.18s ease",
+            }}>
+            {/* Search input */}
+            <div style={{ display:"flex",alignItems:"center",gap:12,padding:"14px 20px",borderBottom:"1px solid rgba(255,255,255,0.07)" }}>
+              <span style={{ fontSize:18,color:"#737373" }}>⌕</span>
+              <input
+                ref={cmdInputRef}
+                value={cmdQuery}
+                onChange={e => setCmdQuery(e.target.value)}
+                placeholder="Search contacts, accounts, deals, signals…"
+                autoFocus
+                style={{ flex:1,background:"transparent",border:"none",outline:"none",color:"#fff",fontSize:16,placeholder:"#737373" }}
+              />
+              {cmdLoading && <div style={{ width:16,height:16,border:"2px solid #7C3AED",borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.7s linear infinite",flexShrink:0 }}/>}
+              <kbd style={{ background:"rgba(255,255,255,0.08)",color:"#737373",padding:"2px 8px",borderRadius:4,fontSize:11,flexShrink:0 }}>ESC</kbd>
+            </div>
+
+            {/* Results */}
+            {cmdResults.length > 0 ? (
+              <div style={{ maxHeight:360,overflowY:"auto",padding:"6px 0" }}>
+                {["contact","account","deal","signal"].map(type => {
+                  const group = cmdResults.filter(r => r.type === type);
+                  if (!group.length) return null;
+                  const icons = { contact:"👤", account:"🏢", deal:"💼", signal:"⚡" };
+                  const labels = { contact:"CONTACTS", account:"ACCOUNTS", deal:"DEALS", signal:"SIGNALS" };
+                  return (
+                    <div key={type}>
+                      <div style={{ padding:"6px 20px 4px",fontSize:10,fontWeight:800,color:"#737373",letterSpacing:"0.1em" }}>{labels[type]}</div>
+                      {group.map((r, i) => {
+                        const globalIdx = cmdResults.indexOf(r);
+                        const isActive = globalIdx === cmdIdx;
+                        return (
+                          <div key={r.id}
+                            onMouseEnter={() => setCmdIdx(globalIdx)}
+                            onClick={() => { router.push(r.url); setCmdOpen(false); setCmdQuery(""); setCmdResults([]); }}
+                            style={{
+                              display:"flex",alignItems:"center",gap:12,
+                              padding:"9px 20px",cursor:"pointer",
+                              background:isActive?"rgba(124,58,237,0.12)":"transparent",
+                              borderLeft: isActive?"2px solid #7C3AED":"2px solid transparent",
+                            }}>
+                            <span style={{ fontSize:16,flexShrink:0 }}>{icons[type]}</span>
+                            <div style={{ flex:1,minWidth:0 }}>
+                              <div style={{ fontSize:13,fontWeight:600,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{r.title}</div>
+                              {r.subtitle && <div style={{ fontSize:11,color:"#737373",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{r.subtitle}</div>}
+                            </div>
+                            <span style={{ fontSize:10,color:"#737373",background:"rgba(255,255,255,0.06)",padding:"2px 8px",borderRadius:20,flexShrink:0 }}>{r.meta}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : cmdQuery.length >= 2 && !cmdLoading ? (
+              <div style={{ padding:"32px 20px",textAlign:"center",color:"#737373",fontSize:13 }}>No results for "{cmdQuery}"</div>
+            ) : cmdQuery.length < 2 ? (
+              <div style={{ padding:"16px 20px" }}>
+                <div style={{ fontSize:11,fontWeight:800,color:"#737373",letterSpacing:"0.1em",marginBottom:8 }}>QUICK ACTIONS</div>
+                {[
+                  { label:"New Contact", url:"/dashboard/contacts", icon:"👤" },
+                  { label:"New Deal",    url:"/dashboard/deals",    icon:"💼" },
+                  { label:"New Task",    url:"/dashboard/tasks",    icon:"✅" },
+                  { label:"View Signals",url:"/dashboard/signals",  icon:"⚡" },
+                ].map((a,i) => (
+                  <div key={a.url} onClick={() => { router.push(a.url); setCmdOpen(false); }}
+                    style={{ display:"flex",alignItems:"center",gap:10,padding:"8px 0",cursor:"pointer",color:"#b3b3b3",fontSize:13 }}
+                    onMouseEnter={e=>e.currentTarget.style.color="#fff"}
+                    onMouseLeave={e=>e.currentTarget.style.color="#b3b3b3"}>
+                    <span>{a.icon}</span>{a.label}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {/* Footer */}
+            <div style={{ padding:"8px 20px",borderTop:"1px solid rgba(255,255,255,0.06)",display:"flex",gap:16,fontSize:11,color:"#737373" }}>
+              <span><kbd style={{ background:"rgba(255,255,255,0.06)",padding:"1px 5px",borderRadius:3 }}>↑↓</kbd> navigate</span>
+              <span><kbd style={{ background:"rgba(255,255,255,0.06)",padding:"1px 5px",borderRadius:3 }}>↵</kbd> open</span>
+              <span><kbd style={{ background:"rgba(255,255,255,0.06)",padding:"1px 5px",borderRadius:3 }}>ESC</kbd> close</span>
+              <span style={{ marginLeft:"auto" }}>⌘K to toggle</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Netflix-style top nav */}
       <nav style={{
@@ -301,6 +442,14 @@ export default function DashboardLayout({ children }) {
           {trial?.status === "active" && (
             <span style={{ fontSize:12, color:"#46d369", fontWeight:600 }}>✓ Active</span>
           )}
+
+          {/* Command Palette trigger */}
+          <button onClick={() => { setCmdOpen(true); setCmdQuery(""); setCmdResults([]); setTimeout(() => cmdInputRef.current?.focus(), 50); }}
+            style={{ display:"flex",alignItems:"center",gap:6,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:6,padding:"5px 10px",cursor:"pointer",color:"#737373",fontSize:12 }}>
+            <span style={{ fontSize:13 }}>⌕</span>
+            <span>Search</span>
+            <kbd style={{ background:"rgba(255,255,255,0.08)",color:"#555",padding:"1px 5px",borderRadius:3,fontSize:10,fontFamily:"inherit" }}>⌘K</kbd>
+          </button>
 
           {/* Notification Bell */}
           <div ref={bellRef} style={{ position:"relative" }}>

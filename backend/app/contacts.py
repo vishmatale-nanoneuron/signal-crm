@@ -1,16 +1,18 @@
 """Signal CRM v2 — Contacts API
 World-class contact management with AI lead scoring,
-activity timeline, sequence enrollment, and smart search.
+activity timeline, sequence enrollment, smart search, and CSV import/export.
 """
+import csv
+import io
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
 from pydantic import BaseModel
 from typing import Optional
 from app.database import get_db
 from app.auth import get_current_user
-from app.models import User, Contact, Activity, Task, Deal
+from app.models import User, Contact, Activity, Task, Deal, _uuid
 
 contacts_router = APIRouter(prefix="/contacts", tags=["Contacts"])
 
@@ -273,4 +275,113 @@ async def export_contacts(
             }
             for c in contacts
         ],
+    }
+
+
+# ── CSV Import ────────────────────────────────────────────────────────────────
+_CSV_FIELD_MAP = {
+    # CSV column → Contact field
+    "first_name": "first_name", "firstname": "first_name", "first": "first_name",
+    "last_name": "last_name", "lastname": "last_name", "last": "last_name",
+    "name": "__fullname__",  # split on first space
+    "full_name": "__fullname__", "fullname": "__fullname__",
+    "email": "email", "email_address": "email",
+    "phone": "phone", "mobile": "phone", "phone_number": "phone",
+    "title": "title", "job_title": "title", "position": "title",
+    "department": "department", "dept": "department",
+    "company": "__company_notes__",  # stored in notes as "Company: X"
+    "company_name": "__company_notes__",
+    "country": "country", "location": "country",
+    "linkedin": "linkedin", "linkedin_url": "linkedin",
+    "stage": "stage", "status": "stage",
+    "notes": "notes", "note": "notes",
+    "source": "source",
+}
+
+def _parse_contact_row(row: dict) -> dict:
+    """Normalise a CSV row dict → Contact kwargs."""
+    lowered = {k.strip().lower().replace(" ", "_"): v.strip() for k, v in row.items()}
+    out = {
+        "first_name": "", "last_name": "", "email": "", "phone": "",
+        "title": "", "department": "", "country": "", "linkedin": "",
+        "stage": "prospect", "source": "import", "notes": "",
+    }
+    for csv_col, val in lowered.items():
+        field = _CSV_FIELD_MAP.get(csv_col)
+        if not field or not val:
+            continue
+        if field == "__fullname__":
+            parts = val.split(" ", 1)
+            out["first_name"] = parts[0]
+            out["last_name"]  = parts[1] if len(parts) > 1 else ""
+        elif field == "__company_notes__":
+            out["notes"] = f"Company: {val}" + (f"\n{out['notes']}" if out["notes"] else "")
+        elif field in out:
+            if field == "stage" and val.lower() not in STAGES:
+                val = "prospect"
+            out[field] = val
+    return out
+
+
+@contacts_router.post("/import")
+async def import_contacts_csv(
+    file: UploadFile = File(..., description="CSV file with contacts"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Bulk import contacts from CSV. Skips rows with duplicate emails."""
+    if not file.filename.lower().endswith(".csv"):
+        raise HTTPException(400, "Only CSV files are supported.")
+    raw = await file.read()
+    try:
+        text = raw.decode("utf-8-sig")  # handle BOM
+    except UnicodeDecodeError:
+        text = raw.decode("latin-1")
+
+    reader = csv.DictReader(io.StringIO(text))
+    rows = list(reader)
+    if not rows:
+        return {"success": True, "created": 0, "skipped": 0, "errors": ["Empty CSV"]}
+
+    # Fetch existing emails for dedup
+    existing_r = await db.execute(
+        select(Contact.email).where(Contact.user_id == user.id)
+    )
+    existing_emails = {e for (e,) in existing_r.all() if e}
+
+    created = skipped = 0
+    errors = []
+    for i, row in enumerate(rows[:500]):  # max 500 rows per import
+        try:
+            data = _parse_contact_row(row)
+            if not data["first_name"]:
+                skipped += 1
+                continue
+            if data["email"] and data["email"] in existing_emails:
+                skipped += 1
+                continue
+            c = Contact(
+                id=_uuid(), user_id=user.id,
+                first_name=data["first_name"], last_name=data["last_name"],
+                email=data["email"], phone=data["phone"],
+                title=data["title"], department=data["department"],
+                country=data["country"], linkedin=data["linkedin"],
+                stage=data["stage"], source=data["source"],
+                notes=data["notes"],
+                lead_score=STAGE_SCORE.get(data["stage"], 20),
+            )
+            db.add(c)
+            if data["email"]:
+                existing_emails.add(data["email"])
+            created += 1
+        except Exception as e:
+            errors.append(f"Row {i+2}: {str(e)[:80]}")
+
+    await db.commit()
+    return {
+        "success": True,
+        "created": created,
+        "skipped": skipped,
+        "errors": errors[:10],
+        "message": f"Imported {created} contacts" + (f", skipped {skipped} duplicates" if skipped else ""),
     }

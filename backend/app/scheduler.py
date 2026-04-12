@@ -1,14 +1,14 @@
 """Signal CRM — Background Scheduler
-Runs every day at 6:00 AM UTC:
-  1. Auto-scans all watchlist companies for all users
-  2. Sends daily digest email with top signals + action plan
+Jobs:
+  • Daily  @ 06:00 UTC — watchlist scans + digest email
+  • Hourly @ :00     — task due reminders + stale deal alerts
 """
 import asyncio
 from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import AsyncSessionLocal
-from app.models import User, WatchlistAccount, WebSignal, Deal
+from app.models import User, WatchlistAccount, WebSignal, Deal, Task, Notification, _uuid
 from app.digest_email import send_daily_digest, send_signal_alert
 
 # Lazy import to avoid circular deps at module load
@@ -172,8 +172,75 @@ async def run_daily_job():
     print(f"[Scheduler] Daily job complete — {datetime.utcnow().isoformat()}")
 
 
+async def run_task_reminders():
+    """Hourly: fire in-app notifications for tasks whose reminder_at is now±30min."""
+    now = datetime.utcnow()
+    window_start = now - timedelta(minutes=5)
+    window_end   = now + timedelta(minutes=55)  # within the next hour
+    try:
+        async with AsyncSessionLocal() as db:
+            tasks_r = await db.execute(
+                select(Task).where(
+                    Task.reminder_at >= window_start,
+                    Task.reminder_at <= window_end,
+                    Task.status.in_(["open", "in_progress"]),
+                )
+            )
+            tasks = tasks_r.scalars().all()
+            count = 0
+            for t in tasks:
+                # Avoid duplicate notifications: clear reminder_at after firing
+                n = Notification(
+                    id=_uuid(), user_id=t.user_id,
+                    type="task_due",
+                    title=f"Task Due: {t.title}",
+                    body=f"Priority: {t.priority}. Due: {t.due_date.strftime('%d %b %Y') if t.due_date else 'today'}",
+                    entity_type="task",
+                    entity_id=t.id,
+                )
+                db.add(n)
+                t.reminder_at = None  # prevent re-firing
+                count += 1
+            if count:
+                await db.commit()
+                print(f"[Scheduler] Task reminders fired: {count}")
+    except Exception as e:
+        print(f"[Scheduler] Task reminder error: {e}")
+
+
+async def run_stale_deal_alerts():
+    """Daily: notify users about deals stale for 14+ days."""
+    try:
+        async with AsyncSessionLocal() as db:
+            cutoff = datetime.utcnow() - timedelta(days=14)
+            deals_r = await db.execute(
+                select(Deal).where(
+                    Deal.updated_at <= cutoff,
+                    Deal.stage.notin_(["won", "lost"]),
+                )
+            )
+            deals = deals_r.scalars().all()
+            count = 0
+            for d in deals:
+                n = Notification(
+                    id=_uuid(), user_id=d.user_id,
+                    type="warning",
+                    title=f"Deal Going Cold: {d.company_name or d.title}",
+                    body=f"No activity in {(datetime.utcnow()-d.updated_at).days} days. Stage: {d.stage}. Take action now.",
+                    entity_type="deal",
+                    entity_id=d.id,
+                )
+                db.add(n)
+                count += 1
+            if count:
+                await db.commit()
+                print(f"[Scheduler] Stale deal alerts: {count}")
+    except Exception as e:
+        print(f"[Scheduler] Stale deal alert error: {e}")
+
+
 def start_scheduler():
-    """Start APScheduler with daily job at 06:00 UTC."""
+    """Start APScheduler: daily job @ 06:00 UTC + hourly task reminders."""
     try:
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
         from apscheduler.triggers.cron import CronTrigger
@@ -186,8 +253,22 @@ def start_scheduler():
             replace_existing=True,
             misfire_grace_time=3600,
         )
+        scheduler.add_job(
+            run_task_reminders,
+            CronTrigger(minute=0, timezone="UTC"),  # every hour on the hour
+            id="task_reminders",
+            replace_existing=True,
+            misfire_grace_time=300,
+        )
+        scheduler.add_job(
+            run_stale_deal_alerts,
+            CronTrigger(hour=7, minute=0, timezone="UTC"),  # daily @ 07:00 UTC
+            id="stale_deal_alerts",
+            replace_existing=True,
+            misfire_grace_time=3600,
+        )
         scheduler.start()
-        print("✓ Signal CRM — Scheduler started (daily @ 06:00 UTC)")
+        print("✓ Signal CRM — Scheduler started (daily digest @06:00, task reminders @:00, stale deals @07:00 UTC)")
         return scheduler
     except ImportError:
         print("⚠ APScheduler not installed — scheduler disabled")

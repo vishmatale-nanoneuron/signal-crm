@@ -38,13 +38,83 @@ function Stat({ label, value, color, sub, big }) {
   );
 }
 
+function RevenueChart({ months, growth }) {
+  if (!months?.length) return null;
+  const maxRev = Math.max(...months.map(m => m.revenue), 1);
+  const hasData = months.some(m => m.revenue > 0);
+  return (
+    <div style={{ background:"#1a1a1a",border:"1px solid rgba(255,255,255,0.06)",borderRadius:6,padding:"24px 28px" }}>
+      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20 }}>
+        <div style={{ fontSize:14,fontWeight:700,color:"#fff" }}>Monthly Won Revenue</div>
+        {hasData && (
+          <span style={{
+            fontSize:12,fontWeight:700,padding:"3px 10px",borderRadius:20,
+            background: growth >= 0 ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
+            color: growth >= 0 ? "#22c55e" : "#ef4444",
+          }}>
+            {growth >= 0 ? "+" : ""}{growth}% vs prev period
+          </span>
+        )}
+      </div>
+      {/* SVG Bar Chart */}
+      <div style={{ display:"flex",alignItems:"flex-end",gap:8,height:120,marginBottom:12 }}>
+        {months.map((m, i) => {
+          const h = hasData ? Math.max(m.revenue / maxRev * 100, m.revenue > 0 ? 4 : 0) : 0;
+          const isLast = i === months.length - 1;
+          return (
+            <div key={m.month} style={{ flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4,height:"100%" }}>
+              <div style={{ flex:1,display:"flex",alignItems:"flex-end",width:"100%" }}>
+                <div
+                  title={`${m.month}: ${fmt(m.revenue)} (${m.deals_won} won)`}
+                  style={{
+                    width:"100%",
+                    height: h > 0 ? `${h}%` : "2px",
+                    background: isLast
+                      ? "linear-gradient(180deg,#00F0FF,#7C3AED)"
+                      : "rgba(124,58,237,0.4)",
+                    borderRadius:"3px 3px 0 0",
+                    minHeight:2,
+                    transition:"height 0.5s ease",
+                    cursor:"default",
+                  }}
+                />
+              </div>
+              {m.revenue > 0 && (
+                <div style={{ fontSize:9,color:"#737373",textAlign:"center",whiteSpace:"nowrap" }}>
+                  {fmt(m.revenue)}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {/* X axis labels */}
+      <div style={{ display:"flex",gap:8 }}>
+        {months.map(m => (
+          <div key={m.month} style={{ flex:1,fontSize:9,color:"#737373",textAlign:"center",letterSpacing:"0.02em" }}>
+            {m.month.split(" ")[0]}
+          </div>
+        ))}
+      </div>
+      {!hasData && (
+        <div style={{ textAlign:"center",color:"#444",fontSize:12,marginTop:8 }}>Win deals to see revenue trends</div>
+      )}
+    </div>
+  );
+}
+
 export default function AnalyticsPage() {
   const [data,    setData]    = useState(null);
+  const [monthly, setMonthly] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiFetch("/analytics/overview").then(d => {
+    Promise.all([
+      apiFetch("/analytics/overview"),
+      apiFetch("/analytics/monthly-revenue?months=6"),
+    ]).then(([d, m]) => {
       if (d.success) setData(d);
+      if (m.success) setMonthly(m);
       setLoading(false);
     });
   }, []);
@@ -103,6 +173,27 @@ export default function AnalyticsPage() {
         <Stat label="Avg Deal Cycle"    value={ov.avg_deal_cycle_days > 0 ? `${ov.avg_deal_cycle_days}d` : "—"} color="#b3b3b3" sub="days to close" />
         <Stat label="Countries"         value={ov.countries_in_pipeline}     color="#a855f7" sub="in pipeline" />
       </div>
+
+      {/* Revenue Trend + Velocity */}
+      {monthly && (
+        <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:16, marginBottom:32 }}>
+          <RevenueChart months={monthly.months} growth={monthly.growth_pct} />
+          <div style={{ background:"#1a1a1a",border:"1px solid rgba(255,255,255,0.06)",borderRadius:6,padding:"24px 28px" }}>
+            <div style={{ fontSize:14,fontWeight:700,color:"#fff",marginBottom:20 }}>6-Month Summary</div>
+            {[
+              { label:"Total Won",      val:fmt(monthly.total_revenue), color:"#22c55e" },
+              { label:"Growth",         val:`${monthly.growth_pct >= 0 ? "+" : ""}${monthly.growth_pct}%`, color:monthly.growth_pct>=0?"#22c55e":"#ef4444" },
+              { label:"Avg / Month",    val:fmt(Math.round(monthly.total_revenue / 6)), color:"#fff" },
+              { label:"Best Month",     val:monthly.months?.reduce((a,b)=>b.revenue>a.revenue?b:a,{revenue:0,month:"—"}).month || "—", color:"#7C3AED" },
+            ].map(r => (
+              <div key={r.label} style={{ display:"flex",justifyContent:"space-between",padding:"9px 0",borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
+                <span style={{ fontSize:12,color:"#737373" }}>{r.label}</span>
+                <span style={{ fontSize:16,fontWeight:800,color:r.color }}>{r.val}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div style={{ display:"grid", gridTemplateColumns:"1.2fr 1fr", gap:20, marginBottom:32 }}>
 

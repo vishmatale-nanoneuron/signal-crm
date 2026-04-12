@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { apiFetch } from "../../../lib/api";
 
 const STAGES = ["prospect", "mql", "sql", "opportunity", "customer", "churned"];
@@ -37,6 +37,10 @@ export default function ContactsPage() {
   const [form, setForm] = useState({ first_name: "", last_name: "", email: "", phone: "", title: "", department: "", country: "", linkedin: "", stage: "prospect", source: "manual", notes: "" });
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
+  // CSV import state
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+  const csvInputRef = useRef(null);
 
   const showToast = (msg, ok = true) => { setToast({ msg, ok }); setTimeout(() => setToast(null), 3500); };
 
@@ -91,6 +95,45 @@ export default function ContactsPage() {
     if (d.success) { showToast(`Score updated: ${d.new_score}`); load(); }
   }
 
+  async function handleCSVImport(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    setImportResult(null);
+    const fd = new FormData();
+    fd.append("file", file);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("sig_token") : null;
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "https://signal-crm-api.onrender.com"}/contacts/import`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      });
+      const d = await res.json();
+      setImportResult(d);
+      if (d.success) { showToast(`Imported ${d.created} contacts!`); load(); }
+      else showToast(d.detail || "Import failed", false);
+    } catch (err) {
+      showToast("Import failed: " + err.message, false);
+    }
+    setImporting(false);
+    e.target.value = "";
+  }
+
+  async function exportCSV() {
+    const d = await apiFetch("/contacts/export/csv-data");
+    if (!d.success || !d.rows?.length) { showToast("No contacts to export", false); return; }
+    const keys = Object.keys(d.rows[0]);
+    const csv = [keys.join(","), ...d.rows.map(r => keys.map(k => `"${String(r[k] ?? "").replace(/"/g, '""')}"`).join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "signal-crm-contacts.csv";
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showToast("Contacts exported!");
+  }
+
   const totalContacts = Object.values(stages).reduce((a, b) => a + b, 0);
 
   return (
@@ -110,9 +153,21 @@ export default function ContactsPage() {
             {total} contacts · AI-scored · {Object.keys(stages).length} stages
           </p>
         </div>
-        <button onClick={openCreate} style={{ padding: "10px 20px", background: "linear-gradient(135deg,#00F0FF,#7C3AED)", border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
-          + Add Contact
-        </button>
+        <div style={{ display:"flex",gap:8,alignItems:"center" }}>
+          {/* Hidden file input for CSV import */}
+          <input ref={csvInputRef} type="file" accept=".csv" onChange={handleCSVImport} style={{ display:"none" }} />
+          <button onClick={exportCSV}
+            style={{ padding:"9px 16px",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:8,color:"#b3b3b3",fontSize:13,cursor:"pointer",fontWeight:600 }}>
+            Export CSV
+          </button>
+          <button onClick={() => csvInputRef.current?.click()} disabled={importing}
+            style={{ padding:"9px 16px",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:8,color:"#b3b3b3",fontSize:13,cursor:"pointer",fontWeight:600,opacity:importing?0.5:1 }}>
+            {importing ? "Importing…" : "Import CSV"}
+          </button>
+          <button onClick={openCreate} style={{ padding:"10px 20px",background:"linear-gradient(135deg,#00F0FF,#7C3AED)",border:"none",borderRadius:8,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer" }}>
+            + Add Contact
+          </button>
+        </div>
       </div>
 
       {/* Stage pills */}
