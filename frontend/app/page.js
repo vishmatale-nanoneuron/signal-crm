@@ -50,9 +50,31 @@ export default function HomePage() {
         borderBottom: scrolled ? "1px solid rgba(255,255,255,0.06)" : "none",
         transition: "all 0.2s",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 32, height: 32, background: "linear-gradient(135deg,#6366f1,#8b5cf6)", borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 16 }}>S</div>
-          <span style={{ fontWeight: 700, fontSize: 16, letterSpacing: "-0.3px" }}>Signal CRM</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="sg_lp" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#00F0FF"/>
+                <stop offset="60%" stopColor="#7C3AED"/>
+                <stop offset="100%" stopColor="#A855F7"/>
+              </linearGradient>
+            </defs>
+            <rect width="32" height="32" rx="7" fill="#06080D"/>
+            <ellipse cx="16" cy="16" rx="11" ry="3.2" fill="none" stroke="#00F0FF" strokeWidth="0.7" opacity="0.2" transform="rotate(-25 16 16)"/>
+            <ellipse cx="16" cy="16" rx="11" ry="3.2" fill="none" stroke="#A855F7" strokeWidth="0.7" opacity="0.2" transform="rotate(25 16 16)"/>
+            <rect x="8.5" y="8" width="15" height="3.2" rx="1.5" fill="url(#sg_lp)"/>
+            <rect x="8.5" y="8" width="3.2" height="8.5" rx="1.5" fill="url(#sg_lp)"/>
+            <rect x="8.5" y="14.4" width="15" height="3.2" rx="1.5" fill="url(#sg_lp)"/>
+            <rect x="20.3" y="14.4" width="3.2" height="8.5" rx="1.5" fill="url(#sg_lp)"/>
+            <rect x="8.5" y="20.8" width="15" height="3.2" rx="1.5" fill="url(#sg_lp)"/>
+            <circle cx="4.5" cy="11" r="1.3" fill="#00F0FF" opacity="0.7"/>
+            <circle cx="27.5" cy="21" r="1.3" fill="#A855F7" opacity="0.7"/>
+          </svg>
+          <span style={{ fontWeight: 700, fontSize: 16, letterSpacing: "-0.3px" }}>
+            <span style={{ color: "#fff" }}>Signal</span>
+            {" "}
+            <span style={{ background: "linear-gradient(135deg,#00F0FF,#A855F7)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>CRM</span>
+          </span>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <button onClick={() => router.push("/login")} style={{ padding: "8px 18px", background: "transparent", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, color: "#ccc", fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>Sign in</button>

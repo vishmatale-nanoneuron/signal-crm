@@ -108,13 +108,8 @@ def _trial_info(user: User) -> dict:
     now = datetime.utcnow()
     if user.is_paid:
         return {"status": "active", "plan": user.plan, "paid": True}
-    if not user.trial_end:
-        return {"status": "blocked", "paid": False}
-    days_left = (user.trial_end - now).days
-    if now < user.trial_end:
-        return {"status": "trial", "paid": False, "days_left": max(0, days_left),
-                "trial_end": user.trial_end.strftime("%Y-%m-%d")}
-    return {"status": "expired", "paid": False, "days_left": 0}
+    # Strictly paid — no free trial access
+    return {"status": "payment_required", "paid": False, "days_left": 0}
 
 
 async def _seed_demo_signals(user_id: str, db: AsyncSession) -> None:
@@ -148,14 +143,12 @@ async def get_current_user(
         if not user or not user.is_active:
             raise HTTPException(401, "Account not found")
         t = _trial_info(user)
-        if t["status"] == "expired":
+        if not t["paid"]:
             raise HTTPException(403, {
-                "error": "trial_expired",
-                "message": "Your 14-day trial has ended. Upgrade to continue.",
+                "error": "payment_required",
+                "message": "An active subscription is required. Please complete payment to access Signal CRM.",
                 "payment_required": True,
             })
-        if t["status"] == "blocked":
-            raise HTTPException(403, "Account blocked. Contact support@nanoneuron.ai")
         return user
     except JWTError:
         raise HTTPException(401, "Invalid or expired token. Please login again.")
@@ -237,9 +230,11 @@ async def login(req: LoginReq, db: AsyncSession = Depends(get_db)):
         raise HTTPException(401, "Invalid email or password")
     if not user.is_active:
         raise HTTPException(403, "Account disabled. Contact support@nanoneuron.ai")
-    # Record last login time
+    # Record last login time + auto-assign owner if email matches OWNER_EMAIL
     try:
         user.last_login_at = datetime.utcnow()
+        if settings.OWNER_EMAIL and user.email.lower() == settings.OWNER_EMAIL.lower():
+            user.is_owner = True
         await db.commit()
     except Exception:
         await db.rollback()
@@ -249,6 +244,7 @@ async def login(req: LoginReq, db: AsyncSession = Depends(get_db)):
         "user": {
             "id": user.id, "name": user.name, "email": user.email,
             "credits": user.credits, "plan": user.plan, "is_paid": user.is_paid,
+            "is_owner": getattr(user, "is_owner", False),
             "company": user.company_name,
             "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
         },
@@ -333,6 +329,7 @@ async def me(user: User = Depends(get_user_no_trial_check), db: AsyncSession = D
             "credits":       user.credits,
             "plan":          user.plan,
             "is_paid":       user.is_paid,
+            "is_owner":      getattr(user, "is_owner", False),
             "is_verified":   getattr(user, "is_verified", True),
             "created_at":    user.created_at.isoformat(),
             "last_login_at": user.last_login_at.isoformat() if getattr(user, "last_login_at", None) else None,

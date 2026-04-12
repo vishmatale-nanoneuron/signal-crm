@@ -19,11 +19,17 @@ function downloadCSV(rows, filename) {
 const NAV = [
   { href: "/dashboard",                  label: "Home" },
   { href: "/dashboard/analytics",        label: "Analytics" },
+  { href: "/dashboard/contacts",         label: "Contacts" },
+  { href: "/dashboard/accounts",         label: "Accounts" },
+  { href: "/dashboard/deals",            label: "Deals" },
+  { href: "/dashboard/activities",       label: "Activities" },
+  { href: "/dashboard/tasks",            label: "Tasks" },
+  { href: "/dashboard/sequences",        label: "Sequences" },
+  { href: "/dashboard/forecast",         label: "Forecast" },
   { href: "/dashboard/watchlist",        label: "Watchlist" },
   { href: "/dashboard/leads",            label: "Leads" },
   { href: "/dashboard/buyer-map",        label: "Buyer Map" },
   { href: "/dashboard/compliance",       label: "Compliance" },
-  { href: "/dashboard/deals",            label: "Deals" },
   { href: "/dashboard/next-actions",     label: "Next Actions" },
   { href: "/dashboard/country-intel",    label: "Country Intel" },
   { href: "/dashboard/email-templates",  label: "Email" },
@@ -97,7 +103,7 @@ export default function DashboardLayout({ children }) {
         }
       });
 
-      if (d.trial?.status === "expired" && !FREE_PATHS.includes(path)) {
+      if (!d.user?.is_paid && !FREE_PATHS.includes(path)) {
         router.replace("/dashboard/payment");
       }
     }).catch(() => {
@@ -126,12 +132,12 @@ export default function DashboardLayout({ children }) {
     };
   }, []);
 
-  // Re-check trial status on path change
+  // Re-check payment status on path change — strictly block unpaid users
   useEffect(() => {
-    if (trial?.status === "expired" && !FREE_PATHS.includes(path)) {
+    if (user && !user.is_paid && !FREE_PATHS.includes(path)) {
       router.replace("/dashboard/payment");
     }
-  }, [path, trial]);
+  }, [path, user]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -232,8 +238,32 @@ export default function DashboardLayout({ children }) {
         transition:"background 0.4s",
       }}>
         {/* Logo */}
-        <a href="/dashboard" style={{ fontSize:24, fontWeight:900, color:"#E50914", letterSpacing:"-0.5px", fontStyle:"italic", marginRight:32, flexShrink:0, textDecoration:"none" }}>
-          SIGNAL
+        <a href="/dashboard" style={{ display:"flex", alignItems:"center", gap:9, marginRight:32, flexShrink:0, textDecoration:"none" }}>
+          <svg width="30" height="30" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="sg_d" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#00F0FF"/>
+                <stop offset="60%" stopColor="#7C3AED"/>
+                <stop offset="100%" stopColor="#A855F7"/>
+              </linearGradient>
+            </defs>
+            <rect width="30" height="30" rx="7" fill="#06080D"/>
+            <ellipse cx="15" cy="15" rx="10.5" ry="3" fill="none" stroke="#00F0FF" strokeWidth="0.7" opacity="0.2" transform="rotate(-25 15 15)"/>
+            <ellipse cx="15" cy="15" rx="10.5" ry="3" fill="none" stroke="#A855F7" strokeWidth="0.7" opacity="0.2" transform="rotate(25 15 15)"/>
+            <rect x="8" y="7.5" width="14" height="3" rx="1.5" fill="url(#sg_d)"/>
+            <rect x="8" y="7.5" width="3" height="8" rx="1.5" fill="url(#sg_d)"/>
+            <rect x="8" y="13.5" width="14" height="3" rx="1.5" fill="url(#sg_d)"/>
+            <rect x="19" y="13.5" width="3" height="8" rx="1.5" fill="url(#sg_d)"/>
+            <rect x="8" y="19.5" width="14" height="3" rx="1.5" fill="url(#sg_d)"/>
+            <circle cx="4.5" cy="10" r="1.2" fill="#00F0FF" opacity="0.7"/>
+            <circle cx="25.5" cy="20" r="1.2" fill="#A855F7" opacity="0.7"/>
+            <circle cx="21" cy="7.5" r="0.9" fill="#FFD700" opacity="0.6"/>
+          </svg>
+          <span style={{ fontSize:16, fontWeight:700, letterSpacing:"-0.3px" }}>
+            <span style={{ color:"#fff" }}>Signal</span>
+            {" "}
+            <span style={{ background:"linear-gradient(135deg,#00F0FF,#A855F7)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>CRM</span>
+          </span>
         </a>
 
         {/* Nav links */}

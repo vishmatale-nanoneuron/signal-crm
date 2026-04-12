@@ -136,13 +136,31 @@ function Page() {
 
       {/* Logo */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 32, marginTop: banner ? 56 : 0 }}>
-        <div style={{
-          width: 36, height: 36, borderRadius: 10,
-          background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontWeight: 800, fontSize: 18, color: "#fff",
-        }}>S</div>
-        <span style={{ fontWeight: 700, fontSize: 20, color: "#fff", letterSpacing: "-0.3px" }}>Signal CRM</span>
+        <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="sg_login" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#00F0FF"/>
+              <stop offset="60%" stopColor="#7C3AED"/>
+              <stop offset="100%" stopColor="#A855F7"/>
+            </linearGradient>
+          </defs>
+          <rect width="36" height="36" rx="9" fill="#06080D"/>
+          <ellipse cx="18" cy="18" rx="12.5" ry="3.5" fill="none" stroke="#00F0FF" strokeWidth="0.8" opacity="0.2" transform="rotate(-25 18 18)"/>
+          <ellipse cx="18" cy="18" rx="12.5" ry="3.5" fill="none" stroke="#A855F7" strokeWidth="0.8" opacity="0.2" transform="rotate(25 18 18)"/>
+          <rect x="9.5" y="9" width="17" height="3.6" rx="1.8" fill="url(#sg_login)"/>
+          <rect x="9.5" y="9" width="3.6" height="9.5" rx="1.8" fill="url(#sg_login)"/>
+          <rect x="9.5" y="16.2" width="17" height="3.6" rx="1.8" fill="url(#sg_login)"/>
+          <rect x="22.9" y="16.2" width="3.6" height="9.5" rx="1.8" fill="url(#sg_login)"/>
+          <rect x="9.5" y="23.4" width="17" height="3.6" rx="1.8" fill="url(#sg_login)"/>
+          <circle cx="5" cy="12" r="1.5" fill="#00F0FF" opacity="0.7"/>
+          <circle cx="31" cy="24" r="1.5" fill="#A855F7" opacity="0.7"/>
+          <circle cx="24" cy="9" r="1" fill="#FFD700" opacity="0.6"/>
+        </svg>
+        <span style={{ fontWeight: 700, fontSize: 20, letterSpacing: "-0.3px" }}>
+          <span style={{ color: "#fff" }}>Signal</span>
+          {" "}
+          <span style={{ background: "linear-gradient(135deg,#00F0FF,#A855F7)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>CRM</span>
+        </span>
       </div>
 
       {/* Card */}

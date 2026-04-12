@@ -85,7 +85,7 @@ export default function PaymentPage() {
         if (v.success) setTimeout(() => window.location.href = "/dashboard", 2500);
       },
       prefill:{ name: user?.name || "", email: user?.email || "" },
-      theme:{ color:"#E50914" },
+      theme:{ color:"#7C3AED" },
       modal:{ ondismiss: () => setPaying(false) },
     };
     if (typeof window.Razorpay !== "undefined") { new window.Razorpay(opts).open(); }
@@ -118,16 +118,16 @@ export default function PaymentPage() {
 
       {/* Header */}
       <div style={{ textAlign:"center", marginBottom:48 }}>
-        <div style={{ fontSize:12, color:"#E50914", fontWeight:700, letterSpacing:"0.12em", marginBottom:10 }}>SIGNAL CRM — GLOBAL PRICING</div>
+        {/* Payment required banner */}
+        <div style={{ display:"inline-flex", alignItems:"center", gap:10, background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.25)", borderRadius:10, padding:"12px 24px", marginBottom:24, fontSize:14, color:"#ef4444", fontWeight:700 }}>
+          <span style={{ fontSize:18 }}>🔒</span>
+          Subscription required — complete payment to unlock Signal CRM
+        </div>
+        <div style={{ fontSize:12, fontWeight:700, letterSpacing:"0.12em", marginBottom:10, background:"linear-gradient(135deg,#00F0FF,#7C3AED)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>SIGNAL CRM — GLOBAL PRICING</div>
         <h1 style={{ fontSize:38, fontWeight:900, color:"#fff", marginBottom:12 }}>Choose your plan</h1>
-        <p style={{ color:"#b3b3b3", fontSize:15, marginBottom:24 }}>
-          Available worldwide. Pay in your currency via SWIFT or Razorpay. Cancel anytime.
+        <p style={{ color:"#b3b3b3", fontSize:15 }}>
+          Available worldwide. Pay in your local currency via SWIFT or Razorpay. Cancel anytime.
         </p>
-        {trial?.status === "trial" && (
-          <div style={{ display:"inline-block", background:"rgba(70,211,105,0.08)", border:"1px solid rgba(70,211,105,0.2)", borderRadius:2, padding:"8px 20px", color:"#46d369", fontSize:13, fontWeight:600 }}>
-            ✓ Free trial — {trial.days_left} days remaining
-          </div>
-        )}
       </div>
 
       {/* Currency selector */}

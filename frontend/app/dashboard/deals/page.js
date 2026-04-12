@@ -5,10 +5,10 @@ import { apiFetch } from "../../../lib/api";
 const STAGES = [
   { key:"signal",      label:"Signal",      color:"#737373", prob:10  },
   { key:"qualified",   label:"Qualified",   color:"#0071eb", prob:25  },
-  { key:"proposal",    label:"Proposal",    color:"#f5a623", prob:50  },
+  { key:"proposal",    label:"Proposal",    color:"#f59e0b", prob:50  },
   { key:"negotiation", label:"Negotiation", color:"#a855f7", prob:75  },
-  { key:"won",         label:"Won",         color:"#46d369", prob:100 },
-  { key:"lost",        label:"Lost",        color:"#E50914", prob:0   },
+  { key:"won",         label:"Won",         color:"#22c55e", prob:100 },
+  { key:"lost",        label:"Lost",        color:"#7C3AED", prob:0   },
 ];
 const STAGE_MAP = Object.fromEntries(STAGES.map(s => [s.key, s]));
 const CURRENCIES = ["INR","USD","EUR","GBP","AED","SGD","AUD","CAD"];
@@ -83,7 +83,7 @@ function DealModal({ deal, onClose, onSave }) {
         <div style={S.field}><label style={S.label}>NOTES</label><textarea style={{ ...S.input,resize:"vertical",minHeight:72 }} value={form.notes} onChange={e=>set("notes",e.target.value)}/></div>
         <div style={{ display:"flex",gap:10,justifyContent:"flex-end",marginTop:8 }}>
           <button onClick={onClose} style={{ padding:"10px 20px",borderRadius:4,background:"transparent",border:"1px solid rgba(255,255,255,0.12)",color:"#b3b3b3",fontSize:13,cursor:"pointer" }}>Cancel</button>
-          <button onClick={save} disabled={saving||!form.title} style={{ padding:"10px 24px",borderRadius:4,background:saving?"rgba(229,9,20,0.5)":"#E50914",color:"#fff",fontSize:13,fontWeight:700,cursor:saving?"not-allowed":"pointer",border:"none" }}>
+          <button onClick={save} disabled={saving||!form.title} style={{ padding:"10px 24px",borderRadius:8,background:saving?"rgba(124,58,237,0.5)":"linear-gradient(135deg,#00F0FF,#7C3AED)",color:"#fff",fontSize:13,fontWeight:700,cursor:saving?"not-allowed":"pointer",border:"none" }}>
             {saving ? "Saving…" : deal ? "Save Changes" : "Create Deal"}
           </button>
         </div>
@@ -138,7 +138,7 @@ function KanbanCard({ deal, onMove, onEdit, onDelete }) {
         </div>
       )}
       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
-        <span style={{ fontSize:10,color:days>21?"#E50914":days>7?"#f5a623":"#737373",fontWeight:days>21?700:400 }}>
+        <span style={{ fontSize:10,color:days>21?"#7C3AED":days>7?"#f59e0b":"#737373",fontWeight:days>21?700:400 }}>
           {days>21?`⚠ ${days}d stale`:`${days}d ago`}
         </span>
         {stageIdx < STAGES.length-1 && (
@@ -218,7 +218,7 @@ export default function DealsPage() {
   return (
     <div>
       {toast && (
-        <div style={{ position:"fixed",bottom:32,right:32,zIndex:300,background:toast.type==="success"?"#46d369":toast.type==="warn"?"#f5a623":"#E50914",color:"#fff",padding:"12px 20px",borderRadius:6,fontSize:13,fontWeight:600,boxShadow:"0 4px 20px rgba(0,0,0,0.5)",animation:"slideUp 0.3s ease" }}>
+        <div style={{ position:"fixed",bottom:32,right:32,zIndex:300,background:toast.type==="success"?"#22c55e":toast.type==="warn"?"#f59e0b":"#7C3AED",color:"#fff",padding:"12px 20px",borderRadius:6,fontSize:13,fontWeight:600,boxShadow:"0 4px 20px rgba(0,0,0,0.5)",animation:"slideUp 0.3s ease" }}>
           <style>{`@keyframes slideUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}`}</style>
           {toast.msg}
         </div>
@@ -238,7 +238,7 @@ export default function DealsPage() {
               <button key={v} onClick={()=>setView(v)} style={{ padding:"7px 14px",borderRadius:3,fontSize:12,fontWeight:600,cursor:"pointer",background:view===v?"rgba(255,255,255,0.12)":"transparent",color:view===v?"#fff":"#737373",border:"none",transition:"all 0.15s" }}>{l}</button>
             ))}
           </div>
-          <button onClick={()=>setModal("new")} style={{ padding:"9px 20px",borderRadius:4,background:"#E50914",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",border:"none" }}>+ New Deal</button>
+          <button onClick={()=>setModal("new")} style={{ padding:"9px 20px",borderRadius:8,background:"linear-gradient(135deg,#00F0FF,#7C3AED)",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",border:"none" }}>+ New Deal</button>
         </div>
       </div>
 
@@ -246,8 +246,8 @@ export default function DealsPage() {
       <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:24 }}>
         {[
           { label:"Pipeline Value", val:fmt(pv),       color:"#fff" },
-          { label:"Won Revenue",    val:fmt(wv),        color:"#46d369" },
-          { label:"Win Rate",       val:`${wr}%`,       color:wr>=50?"#46d369":wr>=25?"#f5a623":"#E50914" },
+          { label:"Won Revenue",    val:fmt(wv),        color:"#22c55e" },
+          { label:"Win Rate",       val:`${wr}%`,       color:wr>=50?"#22c55e":wr>=25?"#f59e0b":"#7C3AED" },
           { label:"Total Deals",    val:tot,            color:"#b3b3b3" },
         ].map(s=>(
           <div key={s.label} style={{ background:"#1a1a1a",border:"1px solid rgba(255,255,255,0.06)",borderRadius:5,padding:"14px 18px" }}>
@@ -329,11 +329,11 @@ export default function DealsPage() {
                 <div style={{ padding:"13px 14px",fontSize:13,color:"#b3b3b3",display:"flex",alignItems:"center" }}>{FLAGS[deal.country]||"🌍"} {deal.country}</div>
                 <div style={{ padding:"13px 14px",fontSize:12,color:"#737373",display:"flex",alignItems:"center" }}>{deal.next_action?.slice(0,60)||"—"}</div>
                 <div style={{ padding:"13px 14px",display:"flex",alignItems:"center" }}>
-                  <span style={{ fontSize:12,color:days>21?"#E50914":days>7?"#f5a623":"#737373",fontWeight:days>21?700:400 }}>{days>21?`⚠ ${days}d`:`${days}d`}</span>
+                  <span style={{ fontSize:12,color:days>21?"#7C3AED":days>7?"#f59e0b":"#737373",fontWeight:days>21?700:400 }}>{days>21?`⚠ ${days}d`:`${days}d`}</span>
                 </div>
                 <div style={{ padding:"13px 14px",display:"flex",alignItems:"center",gap:8 }}>
                   <button onClick={()=>setModal(deal)} style={{ padding:"5px 10px",borderRadius:3,background:"rgba(255,255,255,0.06)",border:"none",color:"#b3b3b3",fontSize:11,cursor:"pointer" }}>Edit</button>
-                  <button onClick={()=>deleteDeal(deal.id)} style={{ padding:"5px 10px",borderRadius:3,background:"rgba(229,9,20,0.08)",border:"none",color:"#E50914",fontSize:11,cursor:"pointer" }}>Del</button>
+                  <button onClick={()=>deleteDeal(deal.id)} style={{ padding:"5px 10px",borderRadius:3,background:"rgba(124,58,237,0.08)",border:"none",color:"#7C3AED",fontSize:11,cursor:"pointer" }}>Del</button>
                 </div>
               </div>
             );

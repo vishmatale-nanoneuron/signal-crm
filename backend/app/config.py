@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     BANK_USD_ACCOUNT: str = ""
     BANK_EUR_ACCOUNT: str = ""
 
+    # ── Owner / CEO Access ────────────────────────────────────
+    # Set this to your email — only this account gets CEO dashboard access
+    OWNER_EMAIL: str = ""
+
     # ── Email / SMTP ──────────────────────────────────────────
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587

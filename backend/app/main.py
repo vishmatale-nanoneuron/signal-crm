@@ -1,12 +1,14 @@
-"""Signal CRM — FastAPI Application
-Production-grade backend (architecture mirrors OpenAI/ChatGPT API design):
+"""Signal CRM v4.0 — FastAPI Application
+World-class CRM backend (architecture mirrors OpenAI/Linear API design):
 - Request-ID tracing on every response
 - Security headers (CSP, HSTS, X-Frame-Options)
-- Per-IP rate limiting (auth: 10/min, API: 120/min)
+- Per-IP rate limiting (auth: 10/min, API: 200/min)
 - Async DB init with retry (background task — non-blocking startup)
 - Idempotent column migrations (IF NOT EXISTS)
 - Scheduler: daily digest + watchlist scans at 06:00 UTC
 - Structured /api/health with DB pool stats
+- v2: Contacts, Accounts, Activities, Tasks, Pipelines,
+       Sequences, Forecasting, Notifications
 """
 import asyncio
 import os
@@ -36,6 +38,16 @@ from app.country_intel import country_intel_router
 from app.analytics import analytics_router
 from app.email_templates import email_router
 from app.detection_engine import detect_router, ai_router
+# v2.0 — World-class CRM additions
+from app.contacts import contacts_router
+from app.accounts import accounts_router
+from app.activities import activities_router
+from app.tasks import tasks_router
+from app.pipelines import pipelines_router
+from app.sequences import sequences_router
+from app.forecasting import forecasting_router
+from app.notifications import notifications_router
+from app.ceo import ceo_router
 
 settings = get_settings()
 
@@ -130,6 +142,8 @@ _MIGRATIONS = [
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified   BOOLEAN      DEFAULT TRUE",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP    NULL",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at    TIMESTAMP    DEFAULT NOW()",
+    # CEO / Owner access
+    "ALTER TABLE sig_users ADD COLUMN IF NOT EXISTS is_owner BOOLEAN DEFAULT FALSE",
 ]
 
 _DB_READY = False    # module-level flag — checked by /api/health
@@ -174,7 +188,7 @@ async def _bg_init_db():
 async def lifespan(app: FastAPI):
     env     = os.environ.get("RAILWAY_ENVIRONMENT", "local")
     db_hint = os.environ.get("DATABASE_URL", "")[:40]
-    print(f"✓ Signal CRM v3.2 starting — env={env} db={db_hint}…")
+    print(f"✓ Signal CRM v4.0 starting — env={env} db={db_hint}…")
 
     # Non-blocking DB init
     asyncio.ensure_future(_bg_init_db())
@@ -183,7 +197,7 @@ async def lifespan(app: FastAPI):
     from app.scheduler import start_scheduler
     _scheduler = start_scheduler()
 
-    print("✓ Signal CRM v3.2 ready")
+    print("✓ Signal CRM v4.0 ready — World's Best CRM")
     yield
 
     if _scheduler:
@@ -197,11 +211,11 @@ async def lifespan(app: FastAPI):
 # ─────────────────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="Signal CRM API",
-    version="3.2.0",
+    version="4.0.0",
     lifespan=lifespan,
     description=(
-        "Privacy-aware cross-border signal CRM — "
-        "Turn competitor web changes into sales actions."
+        "Signal CRM v4.0 — World's #1 Cross-Border Sales Intelligence CRM. "
+        "Contacts · Accounts · Pipeline · Sequences · Forecast · AI Signals."
     ),
     docs_url="/docs",
     redoc_url="/redoc",
@@ -234,10 +248,15 @@ app.add_middleware(
 
 # ── Routers ──────────────────────────────────────────────────────────────────
 for _router in [
+    # v1 core
     auth, watchlist_router, signals_router, buyer_map_router,
     compliance_router, deals_router, next_action_router,
     payment_router, leads_router, country_intel_router,
     analytics_router, email_router, detect_router, ai_router,
+    # v2 world-class CRM
+    contacts_router, accounts_router, activities_router, tasks_router,
+    pipelines_router, sequences_router, forecasting_router, notifications_router,
+    ceo_router,
 ]:
     app.include_router(_router, prefix="/api")
 
@@ -252,16 +271,20 @@ async def health():
     return {
         "status":   "healthy" if db_stats["ok"] else "degraded",
         "app":      "Signal CRM",
-        "version":  "3.2.0",
+        "version":  "4.0.0",
         "env":      os.environ.get("RAILWAY_ENVIRONMENT", "local"),
         "db":       db_stats,
         "db_ready": _DB_READY,
         "security": "hardened",
         "modules": [
+            # v1
             "auth", "signals", "watchlist", "buyer-map",
             "compliance", "deals", "leads", "next-actions",
             "payment", "analytics", "email-templates", "country-intel",
             "detection-engine", "ai-chat",
+            # v2
+            "contacts", "accounts", "activities", "tasks",
+            "pipelines", "sequences", "forecasting", "notifications",
         ],
         "features": {
             "hiring_spike_detection":  True,
@@ -284,9 +307,10 @@ async def db_health():
 @app.get("/", tags=["System"])
 async def root():
     return {
-        "message": "Signal CRM API — Turn web changes into sales actions.",
+        "message": "Signal CRM v4.0 — World's #1 Cross-Border Sales Intelligence CRM.",
         "docs":    "/docs",
         "health":  "/api/health",
-        "version": "3.2.0",
+        "version": "4.0.0",
         "website": "nanoneuron.ai",
+        "features": "contacts|accounts|activities|tasks|pipelines|sequences|forecast|ai-signals",
     }

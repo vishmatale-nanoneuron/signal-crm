@@ -1,4 +1,36 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <rect width="32" height="32" rx="6" fill="#E50914"/>
-  <text x="16" y="22" font-family="Arial Black,Arial,sans-serif" font-size="18" font-weight="900" font-style="italic" fill="white" text-anchor="middle">S</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00F0FF"/>
+      <stop offset="60%" style="stop-color:#7C3AED"/>
+      <stop offset="100%" style="stop-color:#A855F7"/>
+    </linearGradient>
+    <filter id="gl"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <!-- Background -->
+  <rect width="512" height="512" rx="115" fill="#06080D"/>
+  <!-- Orbital rings -->
+  <ellipse cx="256" cy="256" rx="175" ry="50" fill="none" stroke="#00F0FF" stroke-width="1.2" opacity="0.15" transform="rotate(-25 256 256)"/>
+  <ellipse cx="256" cy="256" rx="175" ry="50" fill="none" stroke="#A855F7" stroke-width="1.2" opacity="0.15" transform="rotate(25 256 256)"/>
+  <!-- S letterform: top bar, top-left vertical, mid bar, bottom-right vertical, bottom bar -->
+  <g filter="url(#gl)">
+    <rect x="148" y="138" width="216" height="46" rx="10" fill="url(#g)"/>
+    <rect x="148" y="138" width="46" height="120" rx="10" fill="url(#g)"/>
+    <rect x="148" y="258" width="216" height="46" rx="10" fill="url(#g)"/>
+    <rect x="318" y="304" width="46" height="120" rx="10" fill="url(#g)"/>
+    <rect x="148" y="378" width="216" height="46" rx="10" fill="url(#g)"/>
+    <!-- Inner light on bars -->
+    <rect x="156" y="146" width="200" height="30" rx="6" fill="white" opacity="0.06"/>
+    <rect x="156" y="386" width="200" height="30" rx="6" fill="white" opacity="0.06"/>
+  </g>
+  <!-- Quantum dots -->
+  <circle cx="110" cy="200" r="5" fill="#00F0FF" opacity="0.7" filter="url(#gl)"/>
+  <circle cx="402" cy="312" r="5" fill="#A855F7" opacity="0.7" filter="url(#gl)"/>
+  <circle cx="172" cy="390" r="4" fill="#00FF94" opacity="0.6"/>
+  <circle cx="340" cy="138" r="4" fill="#FFD700" opacity="0.6"/>
+  <!-- 4 pillar dots -->
+  <circle cx="217" cy="448" r="5" fill="#00F0FF"/>
+  <circle cx="243" cy="448" r="5" fill="#A855F7"/>
+  <circle cx="269" cy="448" r="5" fill="#FFD700"/>
+  <circle cx="295" cy="448" r="5" fill="#00FF94"/>
 </svg>

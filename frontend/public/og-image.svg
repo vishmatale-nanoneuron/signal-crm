@@ -1,16 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#141414"/>
-      <stop offset="100%" style="stop-color:#1a0505"/>
+      <stop offset="0%" style="stop-color:#06080D"/>
+      <stop offset="100%" style="stop-color:#0d0a1a"/>
+    </linearGradient>
+    <linearGradient id="brand" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00F0FF"/>
+      <stop offset="60%" style="stop-color:#7C3AED"/>
+      <stop offset="100%" style="stop-color:#A855F7"/>
     </linearGradient>
   </defs>
 
   <!-- Background -->
   <rect width="1200" height="630" fill="url(#bg)"/>
 
-  <!-- Red accent line -->
-  <rect x="0" y="0" width="6" height="630" fill="#E50914"/>
+  <!-- Subtle glow -->
+  <ellipse cx="200" cy="315" rx="300" ry="200" fill="#7C3AED" opacity="0.04"/>
+  <ellipse cx="1000" cy="315" rx="280" ry="180" fill="#00F0FF" opacity="0.03"/>
 
   <!-- Grid lines (subtle) -->
   <line x1="0" y1="210" x2="1200" y2="210" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
@@ -18,43 +24,61 @@
   <line x1="400" y1="0" x2="400" y2="630" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
   <line x1="800" y1="0" x2="800" y2="630" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
 
-  <!-- Logo -->
-  <text x="80" y="110" font-family="Arial Black,Arial,sans-serif" font-size="52" font-weight="900" font-style="italic" fill="#E50914">SIGNAL CRM</text>
+  <!-- Gradient accent line on left -->
+  <rect x="0" y="0" width="5" height="630" fill="url(#brand)"/>
+
+  <!-- Logo mark (S icon) -->
+  <rect x="80" y="62" width="52" height="52" rx="12" fill="#06080D" stroke="rgba(0,240,255,0.15)" stroke-width="1"/>
+  <rect x="91" y="73" width="30" height="7" rx="3.5" fill="url(#brand)"/>
+  <rect x="91" y="73" width="7" height="17" rx="3.5" fill="url(#brand)"/>
+  <rect x="91" y="86" width="30" height="7" rx="3.5" fill="url(#brand)"/>
+  <rect x="114" y="86" width="7" height="17" rx="3.5" fill="url(#brand)"/>
+  <rect x="91" y="99" width="30" height="7" rx="3.5" fill="url(#brand)"/>
+
+  <!-- Logo text -->
+  <text x="144" y="85" font-family="system-ui,-apple-system,'Segoe UI',Arial,sans-serif" font-size="26" font-weight="800" fill="white" letter-spacing="-0.5">Signal</text>
+  <text x="144" y="110" font-family="system-ui,-apple-system,'Segoe UI',Arial,sans-serif" font-size="18" font-weight="600" fill="url(#brand)" letter-spacing="1">CRM</text>
 
   <!-- Tagline -->
-  <text x="80" y="160" font-family="Arial,sans-serif" font-size="22" fill="#b3b3b3">Cross-Border Sales Intelligence</text>
+  <text x="80" y="160" font-family="system-ui,-apple-system,'Segoe UI',Arial,sans-serif" font-size="14" fill="rgba(255,255,255,0.35)" letter-spacing="2">BY NANONEURON SERVICES</text>
 
   <!-- Main headline -->
-  <text x="80" y="260" font-family="Arial Black,Arial,sans-serif" font-size="54" font-weight="900" fill="#ffffff">Turn competitor web changes</text>
-  <text x="80" y="326" font-family="Arial Black,Arial,sans-serif" font-size="54" font-weight="900" fill="#E50914">into closed deals.</text>
+  <text x="80" y="256" font-family="system-ui,-apple-system,'Segoe UI',Arial Black,sans-serif" font-size="52" font-weight="900" fill="#ffffff" letter-spacing="-1.5">Turn competitor web changes</text>
+  <text x="80" y="320" font-family="system-ui,-apple-system,'Segoe UI',Arial Black,sans-serif" font-size="52" font-weight="900" fill="url(#brand)" letter-spacing="-1.5">into closed deals.</text>
 
   <!-- Sub description -->
-  <text x="80" y="390" font-family="Arial,sans-serif" font-size="22" fill="#737373">Hiring spikes · Market expansions · Pricing shifts · Leadership moves</text>
+  <text x="80" y="378" font-family="system-ui,-apple-system,'Segoe UI',Arial,sans-serif" font-size="20" fill="rgba(255,255,255,0.45)">Hiring spikes · Market expansions · Pricing shifts · Leadership moves</text>
 
   <!-- Signal cards -->
-  <rect x="80" y="450" width="220" height="60" rx="6" fill="rgba(229,9,20,0.12)" stroke="rgba(229,9,20,0.3)" stroke-width="1"/>
-  <text x="100" y="476" font-family="Arial,sans-serif" font-size="11" font-weight="700" fill="#E50914">📈 HIRING SPIKE</text>
-  <text x="100" y="496" font-family="Arial,sans-serif" font-size="13" fill="#ffffff">Freshworks · DACH · 9/10</text>
+  <rect x="80" y="428" width="220" height="62" rx="8" fill="rgba(0,240,255,0.06)" stroke="rgba(0,240,255,0.2)" stroke-width="1"/>
+  <text x="100" y="455" font-family="system-ui,Arial,sans-serif" font-size="11" font-weight="700" fill="#00F0FF">📈 HIRING SPIKE</text>
+  <text x="100" y="476" font-family="system-ui,Arial,sans-serif" font-size="13" fill="#ffffff">Freshworks · DACH · 9/10</text>
 
-  <rect x="316" y="450" width="220" height="60" rx="6" fill="rgba(0,113,235,0.12)" stroke="rgba(0,113,235,0.3)" stroke-width="1"/>
-  <text x="336" y="476" font-family="Arial,sans-serif" font-size="11" font-weight="700" fill="#0071eb">🌍 EXPANSION</text>
-  <text x="336" y="496" font-family="Arial,sans-serif" font-size="13" fill="#ffffff">Razorpay · Malaysia · 8/10</text>
+  <rect x="316" y="428" width="220" height="62" rx="8" fill="rgba(168,85,247,0.06)" stroke="rgba(168,85,247,0.2)" stroke-width="1"/>
+  <text x="336" y="455" font-family="system-ui,Arial,sans-serif" font-size="11" font-weight="700" fill="#A855F7">🌍 EXPANSION</text>
+  <text x="336" y="476" font-family="system-ui,Arial,sans-serif" font-size="13" fill="#ffffff">Razorpay · Malaysia · 8/10</text>
 
-  <rect x="552" y="450" width="220" height="60" rx="6" fill="rgba(245,166,35,0.12)" stroke="rgba(245,166,35,0.3)" stroke-width="1"/>
-  <text x="572" y="476" font-family="Arial,sans-serif" font-size="11" font-weight="700" fill="#f5a623">💰 PRICING CHANGE</text>
-  <text x="572" y="496" font-family="Arial,sans-serif" font-size="13" fill="#ffffff">Deel · India EOR · 9/10</text>
+  <rect x="552" y="428" width="220" height="62" rx="8" fill="rgba(255,215,0,0.06)" stroke="rgba(255,215,0,0.2)" stroke-width="1"/>
+  <text x="572" y="455" font-family="system-ui,Arial,sans-serif" font-size="11" font-weight="700" fill="#FFD700">💰 PRICING CHANGE</text>
+  <text x="572" y="476" font-family="system-ui,Arial,sans-serif" font-size="13" fill="#ffffff">Deel · India EOR · 9/10</text>
 
   <!-- Right side stats -->
-  <text x="900" y="280" font-family="Arial Black,Arial,sans-serif" font-size="64" font-weight="900" fill="#E50914" text-anchor="middle">195+</text>
-  <text x="900" y="310" font-family="Arial,sans-serif" font-size="16" fill="#737373" text-anchor="middle">countries covered</text>
+  <text x="900" y="270" font-family="system-ui,Arial Black,sans-serif" font-size="60" font-weight="900" fill="#00F0FF" text-anchor="middle">195+</text>
+  <text x="900" y="300" font-family="system-ui,Arial,sans-serif" font-size="15" fill="rgba(255,255,255,0.35)" text-anchor="middle">countries covered</text>
 
-  <text x="900" y="390" font-family="Arial Black,Arial,sans-serif" font-size="64" font-weight="900" fill="#46d369" text-anchor="middle">14-day</text>
-  <text x="900" y="420" font-family="Arial,sans-serif" font-size="16" fill="#737373" text-anchor="middle">free trial · no credit card</text>
+  <text x="900" y="380" font-family="system-ui,Arial Black,sans-serif" font-size="60" font-weight="900" fill="#00FF94" text-anchor="middle">14-day</text>
+  <text x="900" y="410" font-family="system-ui,Arial,sans-serif" font-size="15" fill="rgba(255,255,255,0.35)" text-anchor="middle">free trial · no credit card</text>
 
-  <!-- CTA -->
-  <rect x="820" y="460" width="280" height="50" rx="8" fill="#E50914"/>
-  <text x="960" y="491" font-family="Arial Black,Arial,sans-serif" font-size="18" font-weight="900" fill="#ffffff" text-anchor="middle">Start Free Trial →</text>
+  <!-- CTA button -->
+  <rect x="800" y="448" width="280" height="52" rx="10" fill="url(#brand)"/>
+  <text x="940" y="480" font-family="system-ui,Arial Black,sans-serif" font-size="17" font-weight="900" fill="#ffffff" text-anchor="middle">Start Free Trial →</text>
 
   <!-- Domain -->
-  <text x="80" y="590" font-family="Arial,sans-serif" font-size="16" fill="#3a3a3a">signal.nanoneuron.ai</text>
+  <text x="80" y="592" font-family="system-ui,Arial,sans-serif" font-size="14" fill="rgba(255,255,255,0.2)">signal.nanoneuron.ai</text>
+
+  <!-- 4 pillar dots (Nanoneuron family mark) -->
+  <circle cx="1100" cy="590" r="4" fill="#00F0FF" opacity="0.6"/>
+  <circle cx="1116" cy="590" r="4" fill="#A855F7" opacity="0.6"/>
+  <circle cx="1132" cy="590" r="4" fill="#FFD700" opacity="0.6"/>
+  <circle cx="1148" cy="590" r="4" fill="#00FF94" opacity="0.6"/>
 </svg>
