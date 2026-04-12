@@ -46,7 +46,9 @@ Set these manually in Render dashboard:
 | `ANTHROPIC_API_KEY` | your Claude API key |
 | `RAZORPAY_KEY_SECRET` | your Razorpay secret |
 | `SMTP_USER` | your Gmail address |
-| `SMTP_PASS` | Gmail app password |
+| `SMTP_PASSWORD` | Gmail app password |
+| `RAZORPAY_KEY_ID` | your Razorpay key ID (rzp_live_...) |
+| `OWNER_EMAIL` | your email (for CEO dashboard access) |
 
 > `sync: false` keys in render.yaml are not committed to git — set them in Render dashboard only.
 

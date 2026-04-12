@@ -21,7 +21,7 @@ SIGNAL_ICONS = {
 
 STRENGTH_COLOR = {"high": "#E50914", "medium": "#f5a623", "low": "#46d369"}
 
-APP_URL = "https://signal-crm.pages.dev"
+APP_URL = "https://signal.nanoneuron.ai"
 
 
 def _send_smtp(to_email: str, subject: str, html: str) -> bool:
